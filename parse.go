@@ -5,16 +5,16 @@ import "fmt"
 type Mode int
 
 const (
-	ModeUnPick Mode = iota
-	ModeRemarkLine
-	ModeRemarkMoreLine
-	ModeDefaultSql
-	ModeProcedure
-	ModeMaybeProcedure1 // create
-	ModeMaybeProcedure2 // create or
-	ModeMaybeProcedure3 // create or replace
-	ModeApostrophe      // '
-	ModeDoubleQuotes    // "
+	ModeUnPick          Mode = iota
+	ModeRemarkLine           // --
+	ModeRemarkMoreLine       // /**/
+	ModeDefaultSql           // select/update
+	ModeProcedure            // create [or replace] procedure
+	ModeMaybeProcedure1      // create
+	ModeMaybeProcedure2      // create or
+	ModeMaybeProcedure3      // create or replace
+	ModeApostrophe           // '
+	ModeDoubleQuotes         // "
 )
 
 func (m Mode) String() string {
@@ -26,7 +26,7 @@ func (m Mode) String() string {
 	case ModeRemarkMoreLine:
 		return "/**/"
 	case ModeDefaultSql:
-		return "select"
+		return "select/update"
 	case ModeMaybeProcedure1:
 		return "create_"
 	case ModeMaybeProcedure2:
@@ -34,7 +34,7 @@ func (m Mode) String() string {
 	case ModeMaybeProcedure3:
 		return "create_or_replace"
 	case ModeProcedure:
-		return "procedure"
+		return "procedure/event"
 	case ModeApostrophe:
 		return "'"
 	case ModeDoubleQuotes:
@@ -73,10 +73,14 @@ func Split(sqls string) []SqlParse {
 		}
 		return false
 	})
-	if len(p.sql) > 0 || len(remark) > 0 {
+	if len(p.sql) > 0 {
 		for p.modestack.Len() > 0 {
 			p.nowmode, _ = p.modestack.Pop().(Mode)
 		}
+	} else if len(remark) > 0 {
+		p.nowmode = ModeRemarkMoreLine
+	}
+	if p.nowmode != ModeUnPick {
 		outs = append(outs, SqlParse{
 			SQL:  fmt.Sprintf("%v%v", remark, p.sql),
 			Type: p.nowmode.String(),
