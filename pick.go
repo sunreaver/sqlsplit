@@ -78,7 +78,7 @@ func (p *Pick) unpickCheck(word, _ string) (newMode Mode) {
 func (p *Pick) maybeProcedure1Check(word, _ string) (newMode Mode) {
 	// create procedure
 	// create or replace procedure
-	if word == "procedure" {
+	if word == "procedure" || word == "event" {
 		return ModeProcedure
 	} else if word == "or" {
 		return ModeMaybeProcedure2
