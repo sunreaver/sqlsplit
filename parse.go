@@ -1,5 +1,7 @@
 package sqlsplit
 
+import "fmt"
+
 type Mode int
 
 const (
@@ -50,14 +52,23 @@ func Split(sqls string) []SqlParse {
 	words := NewWords(sqls)
 	p := Pick{}
 	p.Reset()
+	remark := ""
 	outs := []SqlParse{}
 	words.Range(func(word, space string) (stop bool) {
 		sql, over := p.Pick(word, space)
 		if over {
-			outs = append(outs, SqlParse{
-				SQL:  sql,
-				Type: p.nowmode.String(),
-			})
+			if p.nowmode != ModeUnPick {
+				if p.nowmode == ModeRemarkLine || p.nowmode == ModeRemarkMoreLine {
+					remark += sql
+				} else {
+					// 如果整句未匹配，则证明全是空白字符，直接抛弃
+					outs = append(outs, SqlParse{
+						SQL:  fmt.Sprintf("%v%v", remark, sql),
+						Type: p.nowmode.String(),
+					})
+					remark = ""
+				}
+			}
 			p.Reset()
 		}
 		return false
@@ -67,7 +78,7 @@ func Split(sqls string) []SqlParse {
 			p.nowmode, _ = p.modestack.Pop().(Mode)
 		}
 		outs = append(outs, SqlParse{
-			SQL:  p.sql,
+			SQL:  fmt.Sprintf("%v%v", remark, p.sql),
 			Type: p.nowmode.String(),
 		}) // range 存在最后不以结束符结尾，导致最后一条sql丢失
 	}
