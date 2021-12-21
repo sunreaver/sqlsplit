@@ -55,15 +55,15 @@ func Split(sqls string) []SqlParse {
 	remark := ""
 	outs := []SqlParse{}
 	words.Range(func(word, space string) (stop bool) {
-		sql, over := p.Pick(word, space)
+		over := p.Pick(word, space)
 		if over {
 			if p.nowmode != ModeUnPick {
 				if p.nowmode == ModeRemarkLine || p.nowmode == ModeRemarkMoreLine {
-					remark += sql
+					remark += p.sql
 				} else {
 					// 如果整句未匹配，则证明全是空白字符，直接抛弃
 					outs = append(outs, SqlParse{
-						SQL:  fmt.Sprintf("%v%v", remark, sql),
+						SQL:  fmt.Sprintf("%v%v", remark, p.sql),
 						Type: p.nowmode.String(),
 					})
 					remark = ""
@@ -73,7 +73,7 @@ func Split(sqls string) []SqlParse {
 		}
 		return false
 	})
-	if len(p.sql) > 0 {
+	if len(p.sql) > 0 || len(remark) > 0 {
 		for p.modestack.Len() > 0 {
 			p.nowmode, _ = p.modestack.Pop().(Mode)
 		}

@@ -20,7 +20,7 @@ func (p *Pick) Reset() {
 	p.modestack = NewStack()
 }
 
-func (p *Pick) Pick(word, space string) (sql string, over bool) {
+func (p *Pick) Pick(word, space string) (over bool) {
 	newmode := p.nowmode
 	switch p.nowmode {
 	case ModeUnPick:
@@ -49,14 +49,14 @@ func (p *Pick) Pick(word, space string) (sql string, over bool) {
 		// 上一个模式结束，如果栈空，则本次模式匹配完毕
 		if p.modestack.Len() == 0 {
 			// 上上一个模式为未匹配，则意味着本次匹配结束
-			return p.sql, true
+			return true
 		}
 		newmode, _ = p.modestack.Pop().(Mode)
 		p.nowmode = newmode
 	} else if p.nowmode != newmode {
 		p.nowmode = newmode
 	}
-	return p.sql, false
+	return false
 }
 
 func (p *Pick) unpickCheck(word, _ string) (newMode Mode) {
