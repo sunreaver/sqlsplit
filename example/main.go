@@ -17,7 +17,7 @@ func main() {
 	}
 	data, e := ioutil.ReadFile(*f)
 	if e != nil {
-		fmt.Printf("打开文件 %v 失败: %v", *f, e.Error())
+		fmt.Printf("打开文件 %v 失败: %v\n", *f, e.Error())
 		os.Exit(1)
 	}
 	outs := sqlsplit.Split(string(data))
