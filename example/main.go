@@ -11,6 +11,7 @@ import (
 
 func main() {
 	f := flag.String("f", "example.sql", "解析的文件")
+	flag.Parse()
 	if len(*f) == 0 {
 		os.Exit(1)
 	}
