@@ -64,7 +64,7 @@ func Split(sqls string) []SqlParse {
 					// 如果整句未匹配，则证明全是空白字符，直接抛弃
 					outs = append(outs, SqlParse{
 						SQL:  fmt.Sprintf("%v%v", remark, p.sql),
-						Type: p.nowmode.String(),
+						Type: SQLType(p.sql),
 					})
 					remark = ""
 				}
@@ -83,7 +83,7 @@ func Split(sqls string) []SqlParse {
 	if p.nowmode != ModeUnPick {
 		outs = append(outs, SqlParse{
 			SQL:  fmt.Sprintf("%v%v", remark, p.sql),
-			Type: p.nowmode.String(),
+			Type: SQLType(p.sql),
 		}) // range 存在最后不以结束符结尾，导致最后一条sql丢失
 	}
 	return outs
