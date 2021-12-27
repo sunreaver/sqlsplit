@@ -143,8 +143,8 @@ func (p *Pick) procedureCheck(word, space string) (newMode Mode) {
 		return newMode
 	}
 	if topKey := p.keystack.Look(); topKey != nil {
-		switch topKey.(string) {
-		case ";":
+		key, _ := topKey.(string)
+		if key == ";" {
 			if word == ";" {
 				p.keystack.Pop()
 				if p.keystack.Len() == 0 {
@@ -153,9 +153,15 @@ func (p *Pick) procedureCheck(word, space string) (newMode Mode) {
 				}
 			}
 			return p.nowmode
-		case "end":
+		} else if key == "end" {
 			if word == "end" {
 				p.keystack.Pop()
+				return p.nowmode
+			}
+		} else if strings.HasPrefix(key, "MAY:") {
+			// 可是，可不是
+			p.keystack.Pop()
+			if word == key[len("MAY:"):] {
 				return p.nowmode
 			}
 		}
@@ -165,6 +171,7 @@ func (p *Pick) procedureCheck(word, space string) (newMode Mode) {
 		p.keystack.Push(";") // 等待一个 ; 结束end
 		p.keystack.Push("end")
 	case "case":
+		p.keystack.Push("MAY:case")
 		p.keystack.Push("end")
 	}
 	return ModeProcedure
