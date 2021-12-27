@@ -156,13 +156,15 @@ func (p *Pick) procedureCheck(word, space string) (newMode Mode) {
 		case "end":
 			if word == "end" {
 				p.keystack.Pop()
-				p.keystack.Push(";") // 等待一个 ; 结束end
 				return p.nowmode
 			}
 		}
 	}
 	switch word {
-	case "if", "loop", "begin", "case":
+	case "if", "loop", "begin":
+		p.keystack.Push(";") // 等待一个 ; 结束end
+		p.keystack.Push("end")
+	case "case":
 		p.keystack.Push("end")
 	}
 	return ModeProcedure
