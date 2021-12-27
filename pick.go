@@ -162,7 +162,7 @@ func (p *Pick) procedureCheck(word, space string) (newMode Mode) {
 		}
 	}
 	switch word {
-	case "if", "loop", "begin":
+	case "if", "loop", "begin", "case":
 		p.keystack.Push("end")
 	}
 	return ModeProcedure
