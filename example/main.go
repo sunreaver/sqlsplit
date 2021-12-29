@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -20,6 +21,13 @@ func main() {
 		fmt.Printf("打开文件 %v 失败: %v\n", *f, e.Error())
 		os.Exit(1)
 	}
+
+	BOM := []byte("\uFEFF")
+
+	if bytes.HasPrefix(data, BOM) {
+		data = data[len(BOM):]
+	}
+
 	outs := sqlsplit.Split(string(data))
 	fmt.Printf("共解析出%v条sql\n", len(outs))
 	for idx, v := range outs {
