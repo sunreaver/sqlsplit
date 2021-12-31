@@ -416,3 +416,13 @@ EXCEPTION
 END;
 
 SELECT * from uses;
+SELECT * from uses;;;
+;SELECT * from uses;;;
+;;SELECT * from uses;;;
+;;;SELECT * from uses;; ;
+; ;SELECT * from uses; ; ;
+; ;SELECT * from uses where a = 'cbd';
+; ;SELECT * from uses where a = ';;';  -- abc
+;SELECT * from uses where a = ';;';;;
+;SELECT * from uses where a = 'aa;;';
+SELECT * from uses where a = ';;bb张三' or b = '李四;;';

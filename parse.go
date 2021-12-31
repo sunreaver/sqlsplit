@@ -1,6 +1,9 @@
 package sqlsplit
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 type Mode int
 
@@ -61,9 +64,15 @@ func Split(sqls string) []SqlParse {
 				if p.nowmode == ModeRemarkLine || p.nowmode == ModeRemarkMoreLine {
 					remark += p.sql
 				} else {
+					// 针对orcle普通语句不能带分号的规则，这里把非存储过程的sql语句的分号的去掉
+					psqlTmp := p.sql
+					if p.nowmode != ModeProcedure {
+						psqlTmp = RemoveLastSemicolon(psqlTmp)
+					}
+
 					// 如果整句未匹配，则证明全是空白字符，直接抛弃
 					outs = append(outs, SqlParse{
-						SQL:  fmt.Sprintf("%v%v", remark, p.sql),
+						SQL:  fmt.Sprintf("%v%v", remark, psqlTmp),
 						Type: SQLType(p.sql),
 					})
 					remark = ""
@@ -81,10 +90,30 @@ func Split(sqls string) []SqlParse {
 		p.nowmode = ModeRemarkMoreLine
 	}
 	if p.nowmode != ModeUnPick {
+		// 针对orcle普通语句不能带分号的规则，这里把非存储过程的sql语句的分号的去掉
+		psqlTmp := p.sql
+		if p.nowmode != ModeProcedure {
+			psqlTmp = RemoveLastSemicolon(psqlTmp)
+		}
 		outs = append(outs, SqlParse{
-			SQL:  fmt.Sprintf("%v%v", remark, p.sql),
+			SQL:  fmt.Sprintf("%v%v", remark, psqlTmp),
 			Type: SQLType(p.sql),
 		}) // range 存在最后不以结束符结尾，导致最后一条sql丢失
 	}
 	return outs
+}
+
+/**
+把字符串中最后一个分号移除
+*/
+func RemoveLastSemicolon(str string) string {
+	str = strings.TrimSpace(str)
+	if str == "" {
+		return str
+	}
+	length := len(str)
+	if strings.LastIndex(str, ";") == length-1 {
+		str = str[0 : length-1]
+	}
+	return str
 }
