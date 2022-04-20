@@ -1,3 +1,5 @@
+;
+;;
         create or replace procedure SP_FTP_ACCT_DATA(START_DATE in varchar, --批次日期 yyyy-mm-dd
                                      END_DATE IN VARCHAR,
                                     --i_data in varchar2,
@@ -415,14 +417,17 @@ EXCEPTION
 
 END;
 
-SELECT * from uses;
-SELECT * from uses;;;
-;SELECT * from uses;;;
-;;SELECT * from uses;;;
-;;;SELECT * from uses;; ;
-; ;SELECT * from uses; ; ;
-; ;SELECT * from uses where a = 'cbd';
-; ;SELECT * from uses where a = ';;';  -- abc
-;SELECT * from uses where a = ';;';;;
-;SELECT * from uses where a = 'aa;;';
-SELECT * from uses where a = ';;bb张三' or b = '李四;;';
+SELECT * from users;
+SELECT * from users;;;
+;SELECT * from users;;;
+;;SELECT * from users;;;
+;;;SELECT * from users;; ;
+; ;SELECT * from users; ; ;
+; ;SELECT * from users where a = 'cbd';
+; ;SELECT * from users where a = ';;';  -- abc
+;SELECT * from users where a = ';;';;;
+;SELECT * from users where a = 'aa;;';
+SELECT * from users where a = ';;bb张三' or b = '李四;;';
+TRUNCATE TABLE users;
+TRUNCATE TABLE ;
+TRUNCATE ;

@@ -17,6 +17,7 @@ func SQLType(raw string) string {
 		return "DCL"
 	} else if strings.HasPrefix(raw, "DROP") ||
 		strings.HasPrefix(raw, "ALTER") ||
+		strings.HasPrefix(raw, "TRUNCATE") ||
 		strings.HasPrefix(raw, "CREATE") {
 		return "DDL"
 	} else if strings.HasPrefix(raw, "INSERT") ||
