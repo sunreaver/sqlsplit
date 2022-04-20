@@ -47,8 +47,8 @@ func (m Mode) String() string {
 }
 
 type SqlParse struct {
-	SQL  string `json:"sql"`
-	Type string `json:"type"`
+	SQL  string  `json:"sql"`
+	Type SQLTYPE `json:"type"`
 }
 
 func Split(sqls string) []SqlParse {
