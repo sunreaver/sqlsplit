@@ -34,6 +34,7 @@ var (
 		';':  true,
 		'\'': true,
 		'"':  true,
+		'(':  true, // if(abc) 这种写法导致分词错误
 	}
 	twoWholeWord = map[string]bool{
 		"/*": true,
