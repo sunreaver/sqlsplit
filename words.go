@@ -29,20 +29,22 @@ func NewWords(input string) *Words {
 	return &w
 }
 
+const oneWholeWords = `;'"()` // )begin 和 if(abc)
+
 var (
-	oneWholeWord = map[rune]bool{
-		';':  true,
-		'\'': true,
-		'"':  true,
-		'(':  true, // if(abc) 这种写法导致分词错误
-		')':  true, // )begin 这种写法导致分词错误
-	}
+	oneWholeWord = map[rune]bool{}
 	twoWholeWord = map[string]bool{
 		"/*": true,
 		"*/": true,
 		"--": true,
 	}
 )
+
+func init() {
+	for _, v := range oneWholeWords {
+		oneWholeWord[v] = true
+	}
+}
 
 func isOneWholeWord(v rune) bool {
 	return oneWholeWord[v]
