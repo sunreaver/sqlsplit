@@ -29,7 +29,7 @@ func NewWords(input string) *Words {
 	return &w
 }
 
-const oneWholeWords = `;'"()` // )begin 和 if(abc)
+const oneWholeWords = `;'"()#` // )begin 和 if(abc)
 
 var (
 	oneWholeWord = map[rune]bool{}

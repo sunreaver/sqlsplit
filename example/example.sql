@@ -144,7 +144,7 @@ end;
 
 select * from users where a='';
 
-select * ---abc
+select * #abc
 from a
 /***
 select * from a where abc=1;
@@ -390,7 +390,7 @@ BEGIN
        END IF;
 
        IF X.END_YEAR_DATA IS NOT NULL THEN --定义了年底保留时间
-            --保留数据日期为年底的数据，过滤保留年前的月数据
+            #保留数据日期为年底的数据，过滤保留年前的月数据
             V_WHERE := V_WHERE ||' AND TO_CHAR(DATA_DT+1,''MMDD'')<>''0101'') OR  (DATA_DT < ADD_MONTHS('||'TO_DATE('
                                ||P_AS_OF_DATE||',''YYYY-MM-DD'''||')'||',-'||X.END_YEAR_DATA||')+1)';
        ELSIF X.END_MONTH_DATA IS NOT NULL THEN --定义了月数据
@@ -409,7 +409,7 @@ BEGIN
   RET_MSG := 'SUCCESSFUL';
 
 EXCEPTION
-  --异常
+  # 异常
   WHEN OTHERS THEN
 
     RET_FLG := '1';
@@ -417,7 +417,8 @@ EXCEPTION
 
 END;
 
-SELECT * from users;
+#测试注释;
+SELECT * from users where name = '#';
 SELECT * from users;;;
 ;SELECT * from users;;;
 ;;SELECT * from users;;;

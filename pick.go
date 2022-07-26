@@ -179,6 +179,7 @@ func (p *Pick) procedureCheck(word, space string) (newMode Mode) {
 
 func (p *Pick) remarkLineCheck(_, space string) (newMode Mode) {
 	// --  xxx \n
+	// # xxx \n
 	if strings.Contains(space, "\n") {
 		return ModeUnPick
 	}
@@ -211,7 +212,7 @@ func (p *Pick) defaultSqlCheck(word, _ string) (newMode Mode) {
 
 func (p *Pick) remarkCheck(word string) (newMode Mode, picked bool) {
 	// select * from xxx;
-	if word == "--" {
+	if word == "--" || word == "#" {
 		return ModeRemarkLine, true
 	} else if word == "/*" {
 		return ModeRemarkMoreLine, true
