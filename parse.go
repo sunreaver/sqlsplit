@@ -37,7 +37,7 @@ func (m Mode) String() string {
 	case ModeMaybeProcedure3:
 		return "create_or_replace"
 	case ModeProcedure:
-		return "procedure/event"
+		return "procedure/event/function"
 	case ModeApostrophe:
 		return "'"
 	case ModeDoubleQuotes:

@@ -75,10 +75,14 @@ func (p *Pick) unpickCheck(word, _ string) (newMode Mode) {
 	return ModeDefaultSql
 }
 
+func isProducer(word string) bool {
+	return word == "procedure" || word == "event" || word == "package" || word == "function"
+}
+
 func (p *Pick) maybeProcedure1Check(word, _ string) (newMode Mode) {
 	// create procedure
 	// create or replace procedure
-	if word == "procedure" || word == "event" || word == "package" {
+	if isProducer(word) {
 		return ModeProcedure
 	} else if word == "or" {
 		return ModeMaybeProcedure2
@@ -118,7 +122,7 @@ func (p *Pick) maybeProcedure2Check(word, _ string) (newMode Mode) {
 func (p *Pick) maybeProcedure3Check(word, space string) (newMode Mode) {
 	// create procedure
 	// create or replace procedure
-	if word == "procedure" || word == "event" || word == "package" {
+	if isProducer(word) {
 		return ModeProcedure
 	}
 	if newMode, picked := p.quotationCheck(word); picked {

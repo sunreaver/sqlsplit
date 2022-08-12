@@ -74,7 +74,7 @@ end;
 这是一段没有归属的备注
 *****/
 
-create     procedure SP_FTP_ACCT_DATA(START_DATE in varchar, --批次日期 yyyy-mm-dd
+create     function SP_FTP_ACCT_DATA(START_DATE in varchar, --批次日期 yyyy-mm-dd
                                      END_DATE IN VARCHAR,
                                     --i_data in varchar2,
                                     o_sql_state out varchar) as
