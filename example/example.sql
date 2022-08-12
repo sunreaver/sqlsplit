@@ -74,7 +74,7 @@ end;
 这是一段没有归属的备注
 *****/
 
-create     function SP_FTP_ACCT_DATA(START_DATE in varchar, --批次日期 yyyy-mm-dd
+create     procedure SP_FTP_ACCT_DATA(START_DATE in varchar, --批次日期 yyyy-mm-dd
                                      END_DATE IN VARCHAR,
                                     --i_data in varchar2,
                                     o_sql_state out varchar) as
@@ -414,6 +414,42 @@ EXCEPTION
 
     RET_FLG := '1';
     RET_MSG := SQLERRM;
+
+END;
+
+
+CREATE FUNCTION exit_func(a INTEGER)
+  SPECIFIC exit_func
+  LANGUAGE SQL
+  RETURNS INTEGER
+  BEGIN 
+    DECLARE val INTEGER DEFAULT 0;
+
+    DECLARE myint INTEGER DEFAULT 0;
+
+    DECLARE cur2 CURSOR FOR
+      SELECT c2 FROM udfd1 
+        WHERE c1 <= a 
+        ORDER BY c1;
+
+    DECLARE EXIT HANDLER FOR NOT FOUND
+      BEGIN
+        SIGNAL SQLSTATE '70001' 
+        SET MESSAGE_TEXT = 
+          'Exit handler for not found fired';
+      END;
+
+  OPEN cur2;
+
+  REPEAT
+    FETCH cur2 INTO val;
+    SET myint = myint + val;
+  UNTIL (myint >= a) 
+  END REPEAT;
+
+  CLOSE cur2;
+
+  RETURN myint;
 
 END;
 
