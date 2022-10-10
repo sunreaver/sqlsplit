@@ -9,7 +9,7 @@ type SQLTYPE string
     DDL 主要是指如下的四种SQL 语句，以 CREATE、DROP、ALRET开头和 TRUNCATE TABLE 语句。这里主要说一下 TRUNCATE TABLE ，截断表的数据，也就是删除表中的数据，删除这些数据的时候，系统不做日志，因此无法恢复，删除的速度比较快；而DELETE 语句也是删除表中的记录，但它要写日志，删除的数据可以恢复，数据量大的时候删除比较慢。
 
 2. DML（数据操纵语言）
-    它们是SELECT、UPDATE、INSERT、DELETE，就象它的名字一样，这4条命令是用来对数据库里的数据进行操作的语言。
+    它们是UPDATE、INSERT、DELETE，就象它的名字一样，这4条命令是用来对数据库里的数据进行操作的语言。
 
 3. DQL（数据查询语言）
     例如：SELECT语句
@@ -51,7 +51,8 @@ func SQLType(raw string) SQLTYPE {
 		strings.HasPrefix(raw, "UPDATE") ||
 		strings.HasPrefix(raw, "SET") || // 修复删除外键表的时候，SET FOREIGN_KEY_CHECKS=0 的问题
 		strings.HasPrefix(raw, "CALL") ||
-		strings.HasPrefix(raw, "DELETE") {
+		strings.HasPrefix(raw, "DELETE") ||
+		strings.HasPrefix(raw, "MERGE") {
 		return DML
 	} else if strings.HasPrefix(raw, "COMMIT") ||
 		strings.HasPrefix(raw, "ROLLBACK") ||
