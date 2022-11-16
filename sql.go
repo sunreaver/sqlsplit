@@ -40,6 +40,9 @@ func SQLType(raw string) SQLTYPE {
 		strings.HasPrefix(raw, "NOAUDIT") ||
 		strings.HasPrefix(raw, "QUIT") ||
 		strings.HasPrefix(raw, "REVOKE") ||
+		// 删除外键表的时候，SET FOREIGN_KEY_CHECKS=0 的问题
+		// 同时 DCL 类型 使得 SET不参与explain检测
+		strings.HasPrefix(raw, "SET") ||
 		strings.HasPrefix(raw, "RENAME") {
 		return DCL
 	} else if strings.HasPrefix(raw, "DROP") ||
@@ -49,7 +52,6 @@ func SQLType(raw string) SQLTYPE {
 		return DDL
 	} else if strings.HasPrefix(raw, "INSERT") ||
 		strings.HasPrefix(raw, "UPDATE") ||
-		strings.HasPrefix(raw, "SET") || // 修复删除外键表的时候，SET FOREIGN_KEY_CHECKS=0 的问题
 		strings.HasPrefix(raw, "CALL") ||
 		strings.HasPrefix(raw, "DELETE") ||
 		strings.HasPrefix(raw, "MERGE") {
