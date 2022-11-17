@@ -56,7 +56,18 @@ func isTwoWholeWord(idx int, input string) bool {
 
 // 查找完整单次，遇见空格，换行，分号则结束
 func wholeWord(input string) int {
+	nextMustContinue := false
 	for idx, v := range input {
+		if nextMustContinue {
+			nextMustContinue = false
+			continue
+		}
+		if v == '\\' {
+			// 转义字符出现，强制下一个字符直接进入完整字符
+			// 例如转义了 \;  \'  \" \(
+			nextMustContinue = true
+			continue
+		}
 		if v > ' ' && !isOneWholeWord(v) && !isTwoWholeWord(idx, input) {
 			continue
 		}
