@@ -468,3 +468,9 @@ SELECT * from users where a = ';;bb张三' or b = '李四;;';
 TRUNCATE TABLE users;
 TRUNCATE TABLE ;
 TRUNCATE ;
+
+select * from a where a.c = 'abc\'bcd';
+select * where a where a.c = 'abc\ \'bcd';
+select * where \
+a where a.c = 'abc\'bcd';
+select *;

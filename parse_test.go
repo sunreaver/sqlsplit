@@ -18,7 +18,7 @@ func TestMain(m *testing.M) {
 
 func TestSplit(t *testing.T) {
 	ps := Split(string(insqls)) // 测试分词
-	if len(ps) != 50 {
+	if len(ps) != 54 {
 		t.Errorf("split error, expect 49, got %d", len(ps))
 	}
 }
