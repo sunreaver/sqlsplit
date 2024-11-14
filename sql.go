@@ -1,6 +1,9 @@
 package sqlsplit
 
-import "strings"
+import (
+	"regexp"
+	"strings"
+)
 
 type SQLTYPE string
 
@@ -29,6 +32,15 @@ const (
 	TTL SQLTYPE = "TTL" // （事务处理语言）
 )
 
+// SQLType 根据输入的SQL原始字符串返回对应的SQL类型
+//
+// 参数:
+//
+//	raw: SQL原始字符串
+//
+// 返回值:
+//
+//	返回SQLTYPE类型，表示输入的SQL原始字符串对应的SQL类型
 func SQLType(raw string) SQLTYPE {
 	raw = strings.ToUpper(raw)
 	if strings.HasPrefix(raw, "AUDIT") ||
@@ -39,6 +51,7 @@ func SQLType(raw string) SQLTYPE {
 		strings.HasPrefix(raw, "GRANT") ||
 		strings.HasPrefix(raw, "NOAUDIT") ||
 		strings.HasPrefix(raw, "QUIT") ||
+		strings.HasPrefix(raw, "SHUTDOWN") ||
 		strings.HasPrefix(raw, "REVOKE") ||
 		// 删除外键表的时候，SET FOREIGN_KEY_CHECKS=0 的问题
 		// 同时 DCL 类型 使得 SET不参与explain检测
@@ -48,7 +61,15 @@ func SQLType(raw string) SQLTYPE {
 	} else if strings.HasPrefix(raw, "DROP") ||
 		strings.HasPrefix(raw, "ALTER") ||
 		strings.HasPrefix(raw, "TRUNCATE") ||
-		strings.HasPrefix(raw, "CREATE") {
+		strings.HasPrefix(raw, "CREATE") ||
+		strings.HasPrefix(raw, "REINDEX") ||
+		strings.HasPrefix(raw, "MOVE") ||
+		strings.HasPrefix(raw, "FETCH") ||
+		strings.HasPrefix(raw, "CLOSE") {
+		// 检测 create user/role , drop user/role , alter user/role 语句
+		if istrDCL(raw) {
+			return DCL
+		}
 		return DDL
 	} else if strings.HasPrefix(raw, "INSERT") ||
 		strings.HasPrefix(raw, "UPDATE") ||
@@ -62,4 +83,13 @@ func SQLType(raw string) SQLTYPE {
 		return TTL
 	}
 	return DQL
+}
+
+// 采用正则检测 create user/role , drop user/role , alter user/role 语句
+const dclSQL = `^(?i)(CREATE|DROP|ALTER)\s+(USER|ROLE)`
+
+var dclReg = regexp.MustCompile(dclSQL)
+
+func istrDCL(raw string) bool {
+	return dclReg.MatchString(raw)
 }
