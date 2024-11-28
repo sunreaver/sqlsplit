@@ -44,6 +44,10 @@ func TestSQLType(t *testing.T) {
 		{"comment on table", DDL},
 		{"comment table", DDL},
 		{"comment on user", DCL},
+		{"comment on policy", DCL},
+		{"create policy", DCL},
+		{"create database", DCL},
+		{"create table", DDL},
 	}
 
 	for _, v := range testCases {

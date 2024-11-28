@@ -86,7 +86,7 @@ func SQLType(raw string) SQLTYPE {
 }
 
 // 采用正则检测 create user/role , drop user/role , alter user/role 语句
-const dclSQL = `^(?i)(CREATE|DROP|ALTER|COMMENT ON)\s+(USER|ROLE)`
+const dclSQL = `^(?i)(CREATE|DROP|ALTER|COMMENT ON)\s+(USER|ROLE|DOMAIN|SERVER|POLICY|DATABASE|SCHEMA|TYPE)`
 
 var dclReg = regexp.MustCompile(dclSQL)
 
