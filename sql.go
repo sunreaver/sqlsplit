@@ -44,7 +44,6 @@ const (
 func SQLType(raw string) SQLTYPE {
 	raw = strings.ToUpper(raw)
 	if strings.HasPrefix(raw, "AUDIT") ||
-		strings.HasPrefix(raw, "COMMENT") ||
 		strings.HasPrefix(raw, "CONNECT") ||
 		strings.HasPrefix(raw, "DISCONNECT") ||
 		strings.HasPrefix(raw, "EXIT") ||
@@ -60,6 +59,7 @@ func SQLType(raw string) SQLTYPE {
 		return DCL
 	} else if strings.HasPrefix(raw, "DROP") ||
 		strings.HasPrefix(raw, "ALTER") ||
+		strings.HasPrefix(raw, "COMMENT") ||
 		strings.HasPrefix(raw, "TRUNCATE") ||
 		strings.HasPrefix(raw, "CREATE") ||
 		strings.HasPrefix(raw, "REINDEX") ||
@@ -86,7 +86,7 @@ func SQLType(raw string) SQLTYPE {
 }
 
 // 采用正则检测 create user/role , drop user/role , alter user/role 语句
-const dclSQL = `^(?i)(CREATE|DROP|ALTER)\s+(USER|ROLE)`
+const dclSQL = `^(?i)(CREATE|DROP|ALTER|COMMENT ON)\s+(USER|ROLE)`
 
 var dclReg = regexp.MustCompile(dclSQL)
 
