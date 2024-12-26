@@ -74,6 +74,7 @@ func SQLType(raw string) SQLTYPE {
 	} else if strings.HasPrefix(raw, "INSERT") ||
 		strings.HasPrefix(raw, "UPDATE") ||
 		strings.HasPrefix(raw, "CALL") ||
+		strings.HasPrefix(raw, "DECLARE") ||
 		strings.HasPrefix(raw, "DELETE") ||
 		strings.HasPrefix(raw, "MERGE") {
 		return DML
