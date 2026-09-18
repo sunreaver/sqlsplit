@@ -1,6 +1,128 @@
+-- ============================================================================
+-- SQL 切分示例文件（包含常见、复核、复杂过程、视图及多方言特性）
+-- ============================================================================
+
+-- 前置多余分号与空分号压力测试（将被解析引擎自动忽略，不生成空条目）
 ;
 ;;
-        create or replace procedure SP_FTP_ACCT_DATA(START_DATE in varchar, --批次日期 yyyy-mm-dd
+
+-- ----------------------------------------------------------------------------
+-- 1. 基础 DML / DQL（通用增删改查）
+-- ----------------------------------------------------------------------------
+
+-- 查询活跃用户
+SELECT id, username, email, status
+FROM users
+WHERE status = 'ACTIVE' AND deleted = 0;
+
+-- 批量插入用户数据
+INSERT INTO users (id, username, email, score, created_at)
+VALUES 
+  (1, 'alice', 'alice@example.com', 100, NOW()),
+  (2, 'bob', 'bob@example.com', 85, NOW()),
+  (3, 'charlie', 'charlie@example.com', 95, NOW());
+
+-- 更新用户积分与状态
+UPDATE users
+SET score = score + 10, updated_at = NOW()
+WHERE score < 90 AND status = 'ACTIVE';
+
+-- 删除无用或失效会话
+DELETE FROM user_sessions
+WHERE expire_time < NOW() OR is_revoked = 1;
+
+-- ----------------------------------------------------------------------------
+-- 2. 复核与审核 SQL（Review & Audit SQL）
+-- ----------------------------------------------------------------------------
+
+-- 行级排他锁查询（SELECT FOR UPDATE 复核场景）
+SELECT account_id, balance, frozen_amount
+FROM bank_accounts
+WHERE account_id = 'ACC_8888001'
+FOR UPDATE;
+
+-- 带超时的排他锁查询（WAIT / NOWAIT 场景）
+SELECT order_id, status, pay_amount
+FROM orders
+WHERE order_id = 'ORD_20260918_001'
+FOR UPDATE NOWAIT;
+
+-- 共享锁查询（LOCK IN SHARE MODE）
+SELECT product_id, stock_count
+FROM inventory
+WHERE product_id = 10086
+LOCK IN SHARE MODE;
+
+-- INSERT (SELECT) 复核迁移场景
+INSERT INTO vip_customer_archive (customer_id, customer_name, total_asset, archive_date)
+SELECT c.id, c.name, a.total_asset, CURRENT_DATE
+FROM customers c
+INNER JOIN assets a ON c.id = a.customer_id
+WHERE a.total_asset >= 1000000;
+
+-- ----------------------------------------------------------------------------
+-- 3. 视图（VIEW）与物化视图（DDL 场景）
+-- ----------------------------------------------------------------------------
+
+-- 创建基础普通视图
+CREATE VIEW v_active_customer_overview AS
+SELECT c.id, c.name, c.email, a.total_asset
+FROM customers c
+JOIN assets a ON c.id = a.customer_id
+WHERE c.status = 'ACTIVE';
+
+-- 创建/替换带 WITH CHECK OPTION 的视图
+CREATE OR REPLACE VIEW v_high_value_orders AS
+SELECT order_id, customer_id, total_amount, created_at
+FROM orders
+WHERE total_amount > 5000
+WITH CHECK OPTION;
+
+-- Oracle 风格 FORCE 视图
+CREATE OR REPLACE FORCE VIEW v_pending_transactions AS
+SELECT tx_id, tx_type, amount, tx_status
+FROM tx_log
+WHERE tx_status = 'PENDING';
+
+-- ----------------------------------------------------------------------------
+-- 4. 复杂查询与 CTE（Common Table Expressions）
+-- ----------------------------------------------------------------------------
+
+-- CTE 递归查询（层级部门统计）
+WITH RECURSIVE dept_tree AS (
+  SELECT id, name, parent_id, 1 AS level
+  FROM departments
+  WHERE parent_id IS NULL
+  UNION ALL
+  SELECT d.id, d.name, d.parent_id, dt.level + 1
+  FROM departments d
+  JOIN dept_tree dt ON d.parent_id = dt.id
+)
+SELECT id, name, level FROM dept_tree ORDER BY level, id;
+
+-- CTE 配合 INSERT 场景
+WITH new_ranks AS (
+  SELECT user_id, RANK() OVER (ORDER BY score DESC) as rank_val
+  FROM users
+)
+INSERT INTO user_rank_snapshot (user_id, rank_val, snapshot_time)
+SELECT user_id, rank_val, NOW() FROM new_ranks;
+
+-- MERGE INTO 场景
+MERGE INTO customer_targets t
+USING (SELECT customer_id, target_level FROM customer_updates) s
+ON (t.customer_id = s.customer_id)
+WHEN MATCHED THEN
+  UPDATE SET t.target_level = s.target_level, t.updated_at = SYSDATE
+WHEN NOT MATCHED THEN
+  INSERT (customer_id, target_level, created_at)
+  VALUES (s.customer_id, s.target_level, SYSDATE);
+
+-- ----------------------------------------------------------------------------
+-- 5. Oracle PL/SQL 复杂过程与函数（生产级带声明区、游标、循环与异常处理）
+-- ----------------------------------------------------------------------------
+
+create or replace procedure SP_FTP_ACCT_DATA(START_DATE in varchar, --批次日期 yyyy-mm-dd
                                      END_DATE IN VARCHAR,
                                     --i_data in varchar2,
                                     o_sql_state out varchar) as
@@ -74,161 +196,6 @@ end;
 这是一段没有归属的备注
 *****/
 
-create     procedure SP_FTP_ACCT_DATA(START_DATE in varchar, --批次日期 yyyy-mm-dd
-                                     END_DATE IN VARCHAR,
-                                    --i_data in varchar2,
-                                    o_sql_state out varchar) as
-  /************************************************************************
-  脚本名称 ： 存款每日数据导入
-  目的     : 将月底的数据改为每日数据插入进表
-  作者     ：王洪
-  创建日期 ：2021/6/2
-  源数据表 ：存储过程每步操作
-  目标表   ：etl_log_tbl
-
-  (i_data_date        varchar2, --批次日期 yyyy-mm-dd
-                                       i_data     varchar2
-                                       ) is
-  ************************************************************************/
-  -- i_data_date varchar2(20):='111';
-  -- i_data  varchar2(20):='222';
-  i_data_date varchar2(20);
-  --cur_bal NUMBER(24,6);
-  i_up_date date;
-  i_down_date date;
-  i_cur_bal number(24,6);
-begin
-  execute immediate 'truncate table mspub_model_depositsource';
-  commit;
-
-  i_data_date := START_DATE;
-  --cur_bal := 150000;
-
-  while i_data_date <= END_DATE
-  loop
-    i_down_date := trunc(to_date(i_data_date,'yyyy-mm-dd') + 1,'MM') - 1;
-    i_up_date := add_months(i_down_date + 1,1) - 1;
-    select b.cur_bal + (a.cur_bal-b.cur_bal) / (i_down_date - i_up_date)*(to_date(i_data_date,'yyyy-mm-dd') - i_up_date)  into i_cur_bal
-      from test_hqcdl a
-      left join test_hqcdl b
-        on b.data_dt = to_char(i_up_date,'yyyymmdd')
-     where a.data_dt = to_char(i_down_date,'yyyymmdd');
-
-    insert into mspub_model_depositsource
-      (CUR_BAL,
-       DEP_TYPE,
-       DATA_DATE,
-       TS,
-       DR,
-       ACCOUNT_TYPE,
-       BRAN_CD,
-       CCY_CD
-      )
-    select
-      i_cur_bal,
-      '1',
-      i_data_date,
-      '',
-      '0',
-      '1',
-      '0512001',
-      'CNY'
-      from DUAL;
-    commit;
-
-    i_data_date := TO_CHAR(TO_DATE(i_data_date,'YYYY-MM-DD') + 1,'YYYY-MM-DD');
-    --cur_bal := cur_bal - 100;
-  end loop;
-
-end;
-
-select * from users where a='';
-
-select * #abc
-from a
-/***
-select * from a where abc=1;
-*/
-where abc=1;
-
-
-create or    replace procedure SP_FTP_ACCT_DATA(START_DATE in varchar, --批次日期 yyyy-mm-dd
-                                     END_DATE IN VARCHAR,
-                                    --i_data in varchar2,
-                                    o_sql_state out varchar) as
-  /************************************************************************
-  脚本名称 ： 存款每日数据导入
-  目的     : 将月底的数据改为每日数据插入进表
-  作者     ：王洪
-  创建日期 ：2021/6/2
-  源数据表 ：存储过程每步操作
-  目标表   ：etl_log_tbl
-
-  (i_data_date        varchar2, --批次日期 yyyy-mm-dd
-                                       i_data     varchar2
-                                       ) is
-  ************************************************************************/
-  -- i_data_date varchar2(20):='111';
-  -- i_data  varchar2(20):='222';
-  i_data_date varchar2(20);
-  --cur_bal NUMBER(24,6);
-  i_up_date date;
-  i_down_date date;
-  i_cur_bal number(24,6);
-begin
-  execute immediate 'truncate table mspub_model_depositsource';
-  commit;
-
-  i_data_date := START_DATE;
-  --cur_bal := 150000;
-
-  while i_data_date <= END_DATE
-  loop
-    i_down_date := trunc(to_date(i_data_date,'yyyy-mm-dd') + 1,'MM') - 1;
-    i_up_date := add_months(i_down_date + 1,1) - 1;
-    select b.cur_bal + (a.cur_bal-b.cur_bal) / (i_down_date - i_up_date)*(to_date(i_data_date,'yyyy-mm-dd') - i_up_date)  into i_cur_bal
-      from test_hqcdl a
-      left join test_hqcdl b
-        on b.data_dt = to_char(i_up_date,'yyyymmdd')
-     where a.data_dt = to_char(i_down_date,'yyyymmdd');
-
-    insert into mspub_model_depositsource
-      (CUR_BAL,
-       DEP_TYPE,
-       DATA_DATE,
-       TS,
-       DR,
-       ACCOUNT_TYPE,
-       BRAN_CD,
-       CCY_CD
-      )
-    select
-      i_cur_bal,
-      '1',
-      i_data_date,
-      '',
-      '0',
-      '1',
-      '0512001',
-      'CNY'
-      from DUAL;
-    commit;
-
-    i_data_date := TO_CHAR(TO_DATE(i_data_date,'YYYY-MM-DD') + 1,'YYYY-MM-DD');
-    --cur_bal := cur_bal - 100;
-  end loop;
-
---end;
-end;
-
-/***asb***/
---- end
-
-'abg' select * from add;
-
-select * from abc;
-
-
 create PROCEDURE SP_FTP_DEL_DATA(
                                             P_AS_OF_DATE VARCHAR2
                                            ,RET_MSG      OUT VARCHAR2
@@ -240,12 +207,6 @@ create PROCEDURE SP_FTP_DEL_DATA(
     -- 目标表    ：
     -- 作    者  ： 王洪
     -- 创建日期  ： 2021-06-03
-   **************************************************************************/
-   /*第1次修改记录
-    -- 修改人    ：
-    -- 修改目的  ：
-    -- 修改内容  ：
-    -- 修改时间  ：
    **************************************************************************/
     V_SQL VARCHAR2(800);
     V_WHERE VARCHAR2(400);
@@ -417,44 +378,98 @@ EXCEPTION
 
 END;
 
-
-CREATE FUNCTION exit_func(a INTEGER)
-  SPECIFIC exit_func
-  LANGUAGE SQL
-  RETURNS INTEGER
-  BEGIN 
-    DECLARE val INTEGER DEFAULT 0;
-
-    DECLARE myint INTEGER DEFAULT 0;
-
-    DECLARE cur2 CURSOR FOR
-      SELECT c2 FROM udfd1 
-        WHERE c1 <= a 
-        ORDER BY c1;
-
-    DECLARE EXIT HANDLER FOR NOT FOUND
-      BEGIN
-        SIGNAL SQLSTATE '70001' 
-        SET MESSAGE_TEXT = 
-          'Exit handler for not found fired';
-      END;
-
-  OPEN cur2;
-
-  REPEAT
-    FETCH cur2 INTO val;
-    SET myint = myint + val;
-  UNTIL (myint >= a) 
-  END REPEAT;
-
-  CLOSE cur2;
-
-  RETURN myint;
-
+-- Oracle 独立行 / 结束符匿名块测试
+DECLARE
+  v_test_cnt NUMBER := 0;
+BEGIN
+  SELECT COUNT(*) INTO v_test_cnt FROM users;
+  DBMS_OUTPUT.PUT_LINE('User count is: ' || v_test_cnt);
 END;
+/
 
-#测试注释;
-SELECT * from users where name = '#';
+-- Oracle 行级触发器
+CREATE OR REPLACE TRIGGER trg_user_audit
+AFTER INSERT OR UPDATE ON users
+FOR EACH ROW
+BEGIN
+  INSERT INTO user_audit_log (user_id, op_time)
+  VALUES (:NEW.id, SYSDATE);
+END;
+/
+
+-- ----------------------------------------------------------------------------
+-- 6. MySQL 方言特性（反引号包含分号、DELIMITER 自定义分隔符、# 注释、\ 转义）
+-- ----------------------------------------------------------------------------
+
+-- 反引号包含分号和特殊字符的字段/表名
+SELECT `user;id`, `user;name`, `role;code`
+FROM `corp;db`.`emp;table`
+WHERE `status;flag` = 1;
+
+-- DELIMITER 自定义分隔符存储过程
+DELIMITER //
+CREATE PROCEDURE sp_mysql_calc_salary(IN p_emp_id INT, OUT p_bonus DECIMAL(10,2))
+BEGIN
+  DECLARE v_base DECIMAL(10,2) DEFAULT 0.00;
+  SELECT salary INTO v_base FROM employees WHERE id = p_emp_id;
+  IF v_base > 10000 THEN
+    SET p_bonus = v_base * 0.20;
+  ELSE
+    SET p_bonus = v_base * 0.10;
+  END IF;
+END //
+DELIMITER ;
+
+-- MySQL # 注释与字符串内分号
+# 这是MySQL特定行注释
+SELECT * FROM users WHERE note = 'hello;world#test';
+
+-- 字符串转义字符测试
+select * from a where a.c = 'abc\'bcd';
+select * from a where a.c = 'abc\ \'bcd';
+
+-- ----------------------------------------------------------------------------
+-- 7. PostgreSQL 方言特性（$$ 与 $tag$ 代码块引用）
+-- ----------------------------------------------------------------------------
+
+-- PostgreSQL $$ 引用 PL/pgSQL 函数
+CREATE OR REPLACE FUNCTION get_user_full_name(first_name varchar, last_name varchar)
+RETURNS varchar AS $$
+BEGIN
+  IF first_name IS NULL THEN
+    RETURN last_name;
+  END IF;
+  RETURN first_name || ' ' || last_name;
+END;
+$$ LANGUAGE plpgsql;
+
+-- PostgreSQL $tag$ 命名 Dollar-quote 引用函数
+CREATE OR REPLACE FUNCTION calculate_tax(amount numeric)
+RETURNS numeric AS $tax_calc$
+DECLARE
+  rate numeric := 0.06;
+BEGIN
+  RETURN amount * rate;
+END;
+$tax_calc$ LANGUAGE plpgsql;
+
+-- ----------------------------------------------------------------------------
+-- 8. 事务控制（TTL）与权限管理（DCL）
+-- ----------------------------------------------------------------------------
+
+COMMIT;
+ROLLBACK;
+SAVEPOINT point_insert_ok;
+
+GRANT SELECT, INSERT, UPDATE ON users TO app_rw_user;
+REVOKE DELETE ON users FROM app_rw_user;
+CREATE USER reporter_user IDENTIFIED BY 'Pass#2026';
+ALTER USER reporter_user ACCOUNT LOCK;
+
+-- ----------------------------------------------------------------------------
+-- 9. 连续空分号与边界压力测试
+-- ----------------------------------------------------------------------------
+
 SELECT * from users;;;
 ;SELECT * from users;;;
 ;;SELECT * from users;;;
@@ -466,11 +481,8 @@ SELECT * from users;;;
 ;SELECT * from users where a = 'aa;;';
 SELECT * from users where a = ';;bb张三' or b = '李四;;';
 TRUNCATE TABLE users;
-TRUNCATE TABLE ;
-TRUNCATE ;
+TRUNCATE TABLE target_users;
 
-select * from a where a.c = 'abc\'bcd';
-select * where a where a.c = 'abc\ \'bcd';
-select * where \
-a where a.c = 'abc\'bcd';
-select *;
+-- 文件末尾孤立注释（不应生成空假 SQL）
+-- 脚本执行结束
+/* 审计记录留存 */

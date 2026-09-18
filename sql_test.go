@@ -48,6 +48,25 @@ func TestSQLType(t *testing.T) {
 		{"create policy", DCL},
 		{"create database", DCL},
 		{"create table", DDL},
+		// 带前导注释的测试
+		{"/* block comment */ CREATE TABLE t1 (id int)", DDL},
+		{"-- line comment\nSELECT 1", DQL},
+		{"# mysql comment\nUPDATE t1 SET col = 1", DML},
+		// 复核 SQL
+		{"SELECT * FROM accounts WHERE id = 1 FOR UPDATE", DQL},
+		{"SELECT * FROM accounts WHERE id = 1 LOCK IN SHARE MODE", DQL},
+		{"INSERT INTO vip_users SELECT * FROM users WHERE score > 90", DML},
+		// 视图与存储过程
+		{"CREATE VIEW v_users AS SELECT * FROM users", DDL},
+		{"CREATE OR REPLACE FORCE VIEW v_f AS SELECT 1 FROM dual", DDL},
+		{"CREATE PROCEDURE p1() BEGIN SELECT 1; END", DDL},
+		// CTE
+		{"WITH cte AS (SELECT 1 AS val) SELECT * FROM cte", DQL},
+		{"WITH cte AS (SELECT 1 AS val) INSERT INTO t SELECT * FROM cte", DML},
+		{"WITH cte AS (SELECT 1 AS val) UPDATE t SET val = 1", DML},
+		{"WITH cte AS (SELECT 1 AS val) DELETE FROM t WHERE val = 1", DML},
+		// MERGE
+		{"MERGE INTO t USING s ON (t.id = s.id) WHEN MATCHED THEN UPDATE SET t.v = s.v", DML},
 	}
 
 	for _, v := range testCases {

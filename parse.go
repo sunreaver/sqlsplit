@@ -1,119 +1,95 @@
 package sqlsplit
 
 import (
-	"fmt"
 	"strings"
 )
 
+// Mode 表示 SQL 词法/状态机解析过程中的当前工作模式（状态）
 type Mode int
 
 const (
-	ModeUnPick          Mode = iota
-	ModeRemarkLine           // --
-	ModeRemarkMoreLine       // /**/
-	ModeDefaultSql           // select/update
-	ModeProcedure            // create [or replace] procedure
-	ModeMaybeProcedure1      // create
-	ModeMaybeProcedure2      // create or
-	ModeMaybeProcedure3      // create or replace
-	ModeApostrophe           // '
-	ModeDoubleQuotes         // "
+	// ModeUnPick 未拾取/初始空闲状态（等待识别下一条语句或注释的起始）
+	ModeUnPick Mode = iota
+	// ModeRemarkLine 单行注释状态（以 -- 或 # 开头，直到换行符结束）
+	ModeRemarkLine
+	// ModeRemarkMoreLine 多行/块注释状态（以 /* 开头，直到 */ 结束）
+	ModeRemarkMoreLine
+	// ModeDefaultSql 普通 SQL 语句状态（常规 DDL/DML/DQL，以单一分号结束）
+	ModeDefaultSql
+	// ModeProcedure 存储过程/函数/触发器等复合代码块状态（内部包含多个分号与嵌套块）
+	ModeProcedure
+	// ModeMaybeProcedure1 潜在存储过程判定状态1（已识别到 CREATE 关键字）
+	ModeMaybeProcedure1
+	// ModeMaybeProcedure2 潜在存储过程判定状态2（已识别到 CREATE OR 关键字）
+	ModeMaybeProcedure3
+	// ModeMaybeProcedure3 潜在存储过程判定状态3（已识别到 CREATE OR REPLACE 关键字）
+	ModeMaybeProcedure2
+	// ModeApostrophe 单引号字符串字面量状态（以 ' 开头，处理转义与闭合）
+	ModeApostrophe
+	// ModeDoubleQuotes 双引号标识符或字符串状态（以 " 开头，处理转义与闭合）
+	ModeDoubleQuotes
 )
 
+// modeNames 维护 Mode 枚举到其可读文本标识的映射关系表，用于调试与打印输出
+var modeNames = map[Mode]string{
+	ModeUnPick:          "unpick",
+	ModeRemarkLine:      "--",
+	ModeRemarkMoreLine:  "/**/",
+	ModeDefaultSql:      "select/update",
+	ModeMaybeProcedure1: "create_",
+	ModeMaybeProcedure2: "create_or",
+	ModeMaybeProcedure3: "create_or_replace",
+	ModeProcedure:       "procedure/event/function",
+	ModeApostrophe:      "'",
+	ModeDoubleQuotes:    "\"",
+}
+
+// String 将 Mode 状态转换为对应的直观字符串描述；未知状态返回 "unknow"
 func (m Mode) String() string {
-	switch m {
-	case ModeUnPick:
-		return "unpick"
-	case ModeRemarkLine:
-		return "--"
-	case ModeRemarkMoreLine:
-		return "/**/"
-	case ModeDefaultSql:
-		return "select/update"
-	case ModeMaybeProcedure1:
-		return "create_"
-	case ModeMaybeProcedure2:
-		return "create_or"
-	case ModeMaybeProcedure3:
-		return "create_or_replace"
-	case ModeProcedure:
-		return "procedure/event/function"
-	case ModeApostrophe:
-		return "'"
-	case ModeDoubleQuotes:
-		return "\""
+	// 判断：通过 map 快速查找状态名称，保持圈复杂度严格小于 10
+	if name, ok := modeNames[m]; ok {
+		return name
 	}
 	return "unknow"
 }
 
+// SqlParse 表示单条解析后的完整 SQL 语句结构体
 type SqlParse struct {
-	SQL  string  `json:"sql"`
+	// SQL 为提取出的完整单条 SQL 文本（已附加前置注释，普通语句去除了尾部分号）
+	SQL string `json:"sql"`
+	// Type 为自动推导出的 SQL 语句类别（DDL、DML、DQL、TTL、DCL）
 	Type SQLTYPE `json:"type"`
 }
 
+// Split 是本库对外导出的核心切分入口方法。
+// 该方法接收多行或多段原始 SQL 脚本文本，将其准确拆分为逻辑上独立、语法完整的单条 SQL 语句列表。
+//
+// 核心兼容与处理特性：
+// 1. 多方言兼容：全面支持 Oracle（PL/SQL 过程、声明区分号保护、/ 独立行结束符）、MySQL（反引号、# 注释、DELIMITER 切换）、PostgreSQL（$$ 引用块）。
+// 2. 空语句过滤：自动忽略连续空分号（如 ;;;）、前置空分号，确保返回的每一项均为有效 SQL。
+// 3. 注释规范化：前置注释紧密附着于下一条 SQL；文件末尾无归属的孤立注释直接丢弃。
+// 4. 分号处理：普通 SQL 移除末尾分号（适配 Oracle 驱动执行规范），存储过程完整保留内部及末尾分号。
 func Split(sqls string) []SqlParse {
-	words := NewWords(sqls)
-	p := Pick{}
-	p.Reset()
-	remark := ""
-	outs := []SqlParse{}
-	words.Range(func(word, space string) (stop bool) {
-		over := p.Pick(word, space)
-		if over {
-			if p.nowmode != ModeUnPick {
-				if p.nowmode == ModeRemarkLine || p.nowmode == ModeRemarkMoreLine {
-					remark += p.sql
-				} else {
-					// 针对orcle普通语句不能带分号的规则，这里把非存储过程的sql语句的分号的去掉
-					psqlTmp := p.sql
-					if p.nowmode != ModeProcedure {
-						psqlTmp = RemoveLastSemicolon(psqlTmp)
-					}
-
-					// 如果整句未匹配，则证明全是空白字符，直接抛弃
-					outs = append(outs, SqlParse{
-						SQL:  fmt.Sprintf("%v%v", remark, psqlTmp),
-						Type: SQLType(p.sql),
-					})
-					remark = ""
-				}
-			}
-			p.Reset()
-		}
-		return false
-	})
-	if len(p.sql) > 0 {
-		for p.modestack.Len() > 0 {
-			p.nowmode, _ = p.modestack.Pop().(Mode)
-		}
-	} else if len(remark) > 0 {
-		p.nowmode = ModeRemarkMoreLine
-	}
-	if p.nowmode != ModeUnPick {
-		// 针对orcle普通语句不能带分号的规则，这里把非存储过程的sql语句的分号的去掉
-		psqlTmp := p.sql
-		if p.nowmode != ModeProcedure {
-			psqlTmp = RemoveLastSemicolon(psqlTmp)
-		}
-		outs = append(outs, SqlParse{
-			SQL:  fmt.Sprintf("%v%v", remark, psqlTmp),
-			Type: SQLType(p.sql),
-		}) // range 存在最后不以结束符结尾，导致最后一条sql丢失
-	}
-	return outs
+	// 调用词法扫描引擎统一执行状态驱动切分
+	return parseSQLScript(sqls)
 }
 
-/**
-把字符串中最后一个分号移除
-*/
+// RemoveLastSemicolon 将输入字符串末尾的最后一个分号移除。
+//
+// 设计背景：
+// Oracle 数据库驱动（如 godror/go-ora）在执行普通 SQL（SELECT/INSERT/UPDATE 等）时，
+// 若末尾携带分号会抛出 "ORA-00911: invalid character" 错误；
+// 因此普通语句在输出前必须剥离尾部分号，而存储过程/匿名块结尾的分号则必须保留。
 func RemoveLastSemicolon(str string) string {
+	// 重要判断：先去除首尾空白字符，若为空字符串则直接返回，避免越界访问
 	str = strings.TrimSpace(str)
 	if str == "" {
 		return str
 	}
-	length := len(str)
-	if strings.LastIndex(str, ";") == length-1 {
-		str = str[0 : length-1]
+
+	// 重要判断：检查字符串末尾是否包含分号，若有则精准截取掉最后一个分号并再次去除空白
+	if strings.HasSuffix(str, ";") {
+		return strings.TrimSpace(str[:len(str)-1])
 	}
 	return str
 }
