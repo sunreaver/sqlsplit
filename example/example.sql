@@ -190,6 +190,7 @@ begin
 
 end;
 
+
 -- 这是一条没有归属的备注
 
 /***
@@ -530,7 +531,6 @@ BEGIN
     COMMIT;
     DBMS_OUTPUT.PUT_LINE('Batch insert completed successfully');
 END;
-/
 
 -- SEC-01: PostgreSQL / ANSI 单引号函数体定义
 CREATE FUNCTION add_num(a INT, b INT) RETURNS INT AS 'SELECT a + b;' LANGUAGE sql;
@@ -547,7 +547,6 @@ CREATE OR REPLACE PACKAGE BODY emp_mgmt AS
     DELETE FROM emp WHERE emp_id = id;
   END fire_emp;
 END emp_mgmt;
-/
 
 -- SEC-03: 独立行除号算术表达式
 SELECT

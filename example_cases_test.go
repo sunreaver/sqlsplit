@@ -618,7 +618,7 @@ SELECT * from users where a = ';;'`,
 	},
 	// Case 45
 	{
-		WantType: DQL,
+		WantType: TTL,
 		WantSQL: `-- ----------------------------------------------------------------------------
 -- 10. 高级边界与高危语法场景（P0/P1 测试用例及业务复杂 PL/SQL 块）
 -- ----------------------------------------------------------------------------
@@ -701,7 +701,7 @@ FROM orders`,
 	},
 	// Case 49
 	{
-		WantType: DCL,
+		WantType: DDL,
 		WantSQL: `-- SEC-04: PostgreSQL 自定义枚举类型声明
 CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy')`,
 	},

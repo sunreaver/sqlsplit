@@ -432,10 +432,6 @@ func (s *sqlScanner) isAtDelimiter() bool {
 // 2. 若嵌套深度 blockDepth > 0（内部尚未完全配对 END），也不能结束过程。
 // 仅当深度归零且不在声明区时，分号才标志整个存储过程的结束。
 func (s *sqlScanner) canTerminateBlock() bool {
-	// Oracle PACKAGE BODY 仅在独立行斜杠或文件结束时闭合
-	if s.isPkgBody {
-		return false
-	}
 	// 重要判断：处于 Oracle 变量声明区时，分号为变量声明语句分隔符，不能终止过程
 	if !s.hasBegun && s.inDecl {
 		return false
@@ -551,6 +547,25 @@ func (s *sqlScanner) handleControlWord(word string) {
 	s.blockDepth++
 }
 
+// handleEndWord 处理 END 关键字引起的块嵌套深度递减与声明区状态流转。
+//
+// 设计背景：
+// 1. 若深度递减至 0 且处于 Oracle 包体（isPkgBody），说明内部子过程（PROCEDURE/FUNCTION）结束，
+//    应恢复包体顶层声明区状态（inDecl = true, hasBegun = false），防止子过程的分号将包体截断。
+// 2. 若在深度已为 0 的声明区再次遇到 END（包体自身的 END），则解除声明区（inDecl = false），允许包体末尾分号正常闭合。
+func (s *sqlScanner) handleEndWord() {
+	if s.blockDepth > 0 {
+		s.blockDepth--
+		if s.isPkgBody && s.blockDepth == 0 {
+			s.inDecl = true
+			s.hasBegun = false
+		}
+	} else if s.inDecl {
+		s.inDecl = false
+	}
+	s.justSawEnd = true
+}
+
 // updateBlockState 根据当前读取到的关键字推进并更新复合过程块的语法状态机
 func (s *sqlScanner) updateBlockState(word string) {
 	upper := strings.ToUpper(word)
@@ -567,13 +582,7 @@ func (s *sqlScanner) updateBlockState(word string) {
 		s.blockDepth++
 		s.justSawEnd = false
 	case "END":
-		// 重要判断：遇到 END 时嵌套深度递减；若深度已为 0 且处于包规范等无 BEGIN 的声明区，则解除声明状态
-		if s.blockDepth > 0 {
-			s.blockDepth--
-		} else if s.inDecl {
-			s.inDecl = false
-		}
-		s.justSawEnd = true
+		s.handleEndWord()
 	case "IF", "LOOP", "CASE", "REPEAT":
 		s.handleControlWord(upper)
 	default:
@@ -619,7 +628,6 @@ func (s *sqlScanner) onWordRead(word string) {
 			s.isBlock = true
 			if s.leadingTokens[0] == "BEGIN" {
 				s.hasBegun = true
-				s.blockDepth = 1
 			} else if s.leadingTokens[0] == "DECLARE" {
 				s.inDecl = true
 			}

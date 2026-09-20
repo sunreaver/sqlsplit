@@ -24,7 +24,8 @@ func TestSQLType(t *testing.T) {
 		{"SAVEPOINT", TTL},
 		{"SELECT * FROM", DQL},
 		{"SET FOREIGN_KEY_CHECKS=0", DCL},
-		{"RENAME TABLE", DCL},
+		{"RENAME TABLE", DDL},
+		{"RENAME USER u1 TO u2", DCL},
 		{"CREATE INDEX", DDL},
 		{"DROP INDEX", DDL},
 		{"ALTER INDEX", DDL},
@@ -39,14 +40,18 @@ func TestSQLType(t *testing.T) {
 		{"ALTER EXTENSION", DDL},
 		{"savepoint abc", TTL},
 		{"reindex abc", DDL},
-		{"close   abc", DDL},
+		{"close   abc", DCL},
+		{"open    abc", DCL},
+		{"fetch next from cur", DQL},
 		{"shutdown c", DCL},
 		{"comment on table", DDL},
 		{"comment table", DDL},
 		{"comment on user", DCL},
 		{"comment on policy", DCL},
 		{"create policy", DCL},
-		{"create database", DCL},
+		{"create database", DDL},
+		{"create schema", DDL},
+		{"create type", DDL},
 		{"create table", DDL},
 		// 带前导注释的测试
 		{"/* block comment */ CREATE TABLE t1 (id int)", DDL},
@@ -56,6 +61,11 @@ func TestSQLType(t *testing.T) {
 		{"SELECT * FROM accounts WHERE id = 1 FOR UPDATE", DQL},
 		{"SELECT * FROM accounts WHERE id = 1 LOCK IN SHARE MODE", DQL},
 		{"INSERT INTO vip_users SELECT * FROM users WHERE score > 90", DML},
+		{"REPLACE INTO vip_users (id, score) VALUES (1, 100)", DML},
+		// 事务开启
+		{"START TRANSACTION", TTL},
+		{"BEGIN TRANSACTION", TTL},
+		{"BEGIN WORK", TTL},
 		// 视图与存储过程
 		{"CREATE VIEW v_users AS SELECT * FROM users", DDL},
 		{"CREATE OR REPLACE FORCE VIEW v_f AS SELECT 1 FROM dual", DDL},
@@ -71,6 +81,9 @@ func TestSQLType(t *testing.T) {
 		{"WITH cte AS (SELECT '(fake)' AS val) INSERT INTO t SELECT * FROM cte", DML},
 		{"WITH cte AS (SELECT /* ) */ 1 AS val) INSERT INTO t SELECT * FROM cte", DML},
 		{"WITH cte AS (SELECT \"col(name)\" AS val) DELETE FROM t WHERE val = 1", DML},
+		// 匿名块/事务
+		{"BEGIN NULL; END;", TTL},
+		{"DECLARE x INT; BEGIN NULL; END;", DML},
 	}
 
 	for _, v := range testCases {

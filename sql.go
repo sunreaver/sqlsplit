@@ -22,7 +22,7 @@ const (
 )
 
 // dclExactVerbs 包含直接通过首动词即可无条件判定为 DCL 类别的关键字集合。
-// 这些指令均用于权限控制、会话管理或数据库级系统配置。
+// 这些指令均用于权限控制、会话管理或数据库级系统/游标资源配置。
 var dclExactVerbs = map[string]bool{
 	"AUDIT":      true, // Oracle 审计控制
 	"CONNECT":    true, // 数据库连接控制
@@ -34,14 +34,15 @@ var dclExactVerbs = map[string]bool{
 	"SHUTDOWN":   true, // 关闭数据库系统实例
 	"REVOKE":     true, // 回收用户或角色权限
 	"SET":        true, // 设置会话/全局变量（如 MySQL SET FOREIGN_KEY_CHECKS=0，归为 DCL 可避免参与 explain 计划分析）
-	"RENAME":     true, // 重命名对象/用户
 	"USE":        true, // 切换当前活动数据库
 	"LOCK":       true, // 表级锁控制（如 MySQL LOCK TABLES）
 	"UNLOCK":     true, // 解锁控制（如 MySQL UNLOCK TABLES）
+	"OPEN":       true, // 游标/资源开启控制
+	"CLOSE":      true, // 游标/资源关闭控制
 }
 
 // ddlVerbs 包含首动词通常代表数据定义语言（DDL）的关键字集合。
-// 注意：其中的 CREATE、DROP、ALTER、COMMENT 可能是创建用户/角色，后续需进一步结合 istrDCL 甄别。
+// 注意：其中的 CREATE、DROP、ALTER、RENAME、COMMENT 可能是管理用户/角色，后续需进一步结合 istrDCL 甄别。
 var ddlVerbs = map[string]bool{
 	"DROP":     true, // 删除数据库对象（表、视图、索引等）
 	"ALTER":    true, // 修改数据库对象结构
@@ -50,8 +51,7 @@ var ddlVerbs = map[string]bool{
 	"CREATE":   true, // 创建数据库对象（表、视图、索引、过程等）
 	"REINDEX":  true, // 重建索引（PostgreSQL/SQLite）
 	"MOVE":     true, // 移动对象表空间或游标
-	"FETCH":    true, // 游标抓取（某些方言中定义）
-	"CLOSE":    true, // 关闭游标
+	"RENAME":   true, // 重命名对象（如 RENAME TABLE；RENAME USER 会由 istrDCL 归为 DCL）
 }
 
 // dmlVerbs 包含首动词直接代表数据操纵语言（DML）的关键字集合。
@@ -59,9 +59,10 @@ var ddlVerbs = map[string]bool{
 var dmlVerbs = map[string]bool{
 	"INSERT":  true, // 插入数据记录（含 INSERT INTO ... SELECT）
 	"UPDATE":  true, // 更新现有数据记录
+	"DELETE":  true, // 删除数据记录
+	"REPLACE": true, // 替换/写入数据记录（MySQL/SQLite REPLACE INTO）
 	"CALL":    true, // 调用存储过程或函数
 	"DECLARE": true, // 声明游标、变量或匿名 PL/SQL 块
-	"DELETE":  true, // 删除数据记录
 	"MERGE":   true, // 合并写入操作（UPSERT 语义，如 Oracle/PostgreSQL MERGE INTO）
 }
 
@@ -70,12 +71,14 @@ var ttlVerbs = map[string]bool{
 	"COMMIT":    true, // 提交当前活动事务
 	"ROLLBACK":  true, // 回滚当前活动事务
 	"SAVEPOINT": true, // 设定事务保存点
+	"BEGIN":     true, // 开启事务（如 BEGIN;、BEGIN TRANSACTION 等）
+	"START":     true, // 开启事务（如 MySQL START TRANSACTION）
 }
 
 // dclSQL 定义用于检测属于安全/权限控制（DCL）的正则模式。
-// 背景：像 CREATE USER、DROP ROLE、ALTER DATABASE、COMMENT ON POLICY 等虽然以 CREATE/DROP/ALTER 开头，
-// 但其实质管理的是用户、角色、策略或数据库安全域，应准确判定为 DCL 而非普通 DDL。
-const dclSQL = `^(?i)(CREATE|DROP|ALTER|COMMENT ON)\s+(USER|ROLE|DOMAIN|SERVER|POLICY|DATABASE|SCHEMA|TYPE)`
+// 背景：像 CREATE USER、DROP ROLE、ALTER ROLE、RENAME USER、COMMENT ON POLICY 等
+// 虽然以 CREATE/DROP/ALTER/RENAME/COMMENT 开头，但其实质管理的是用户、角色或安全策略，应准确判定为 DCL 而非普通 DDL。
+const dclSQL = `^(?i)(CREATE|DROP|ALTER|RENAME|COMMENT ON)\s+(USER|ROLE|POLICY)`
 
 // dclReg 为编译后的 DCL 识别正则表达式，全局单例复用以提升性能
 var dclReg = regexp.MustCompile(dclSQL)
@@ -119,7 +122,9 @@ func skipBlockComment(raw string, pos int) int {
 //
 // 设计背景：
 // 很多生产环境 SQL 语句开头包含作者信息或版权注释，如：
-//   /* 作者: 张三 */ CREATE TABLE t (...);
+//
+//	/* 作者: 张三 */ CREATE TABLE t (...);
+//
 // 若不剥离前导注释，直接检查首字符会因为首动词被注释阻隔而误判为默认的 DQL 类型。
 func stripLeadingComments(raw string) string {
 	pos := 0
