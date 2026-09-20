@@ -21,9 +21,9 @@ const (
 	// ModeMaybeProcedure1 潜在存储过程判定状态1（已识别到 CREATE 关键字）
 	ModeMaybeProcedure1
 	// ModeMaybeProcedure2 潜在存储过程判定状态2（已识别到 CREATE OR 关键字）
-	ModeMaybeProcedure3
-	// ModeMaybeProcedure3 潜在存储过程判定状态3（已识别到 CREATE OR REPLACE 关键字）
 	ModeMaybeProcedure2
+	// ModeMaybeProcedure3 潜在存储过程判定状态3（已识别到 CREATE OR REPLACE 关键字）
+	ModeMaybeProcedure3
 	// ModeApostrophe 单引号字符串字面量状态（以 ' 开头，处理转义与闭合）
 	ModeApostrophe
 	// ModeDoubleQuotes 双引号标识符或字符串状态（以 " 开头，处理转义与闭合）
@@ -61,8 +61,16 @@ type SqlParse struct {
 	Type SQLTYPE `json:"type"`
 }
 
+// MaxInputSize 为 Split 函数接受的最大输入字节数，默认 100MB。
+// 超过此限制的输入将直接返回 nil，以避免因超大 SQL 文件引发内存溢出。
+const MaxInputSize = 100 * 1024 * 1024
+
 // Split 是本库对外导出的核心切分入口方法。
 // 该方法接收多行或多段原始 SQL 脚本文本，将其准确拆分为逻辑上独立、语法完整的单条 SQL 语句列表。
+//
+// 使用约束：
+//   - 输入必须为 UTF-8 编码文本，不支持 GBK/GB18030 等其他编码。
+//   - 输入大小不应超过 MaxInputSize（100MB），超出将返回 nil。
 //
 // 核心兼容与处理特性：
 // 1. 多方言兼容：全面支持 Oracle（PL/SQL 过程、声明区分号保护、/ 独立行结束符）、MySQL（反引号、# 注释、DELIMITER 切换）、PostgreSQL（$$ 引用块）。
@@ -70,6 +78,10 @@ type SqlParse struct {
 // 3. 注释规范化：前置注释紧密附着于下一条 SQL；文件末尾无归属的孤立注释直接丢弃。
 // 4. 分号处理：普通 SQL 移除末尾分号（适配 Oracle 驱动执行规范），存储过程完整保留内部及末尾分号。
 func Split(sqls string) []SqlParse {
+	// 重要判断：输入超过最大允许大小时，直接返回 nil 以防止 OOM
+	if len(sqls) > MaxInputSize {
+		return nil
+	}
 	// 调用词法扫描引擎统一执行状态驱动切分
 	return parseSQLScript(sqls)
 }
@@ -88,8 +100,8 @@ func RemoveLastSemicolon(str string) string {
 	}
 
 	// 重要判断：检查字符串末尾是否包含分号，若有则精准截取掉最后一个分号并再次去除空白
-	if strings.HasSuffix(str, ";") {
-		return strings.TrimSpace(str[:len(str)-1])
+	if idx := strings.LastIndex(str, ";"); idx >= 0 && idx == len(str)-1 {
+		return strings.TrimSpace(str[:idx])
 	}
 	return str
 }

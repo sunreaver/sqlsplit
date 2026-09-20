@@ -67,6 +67,10 @@ func TestSQLType(t *testing.T) {
 		{"WITH cte AS (SELECT 1 AS val) DELETE FROM t WHERE val = 1", DML},
 		// MERGE
 		{"MERGE INTO t USING s ON (t.id = s.id) WHEN MATCHED THEN UPDATE SET t.v = s.v", DML},
+		// CTE 含括号字符串（隐患 #6 修复验证）
+		{"WITH cte AS (SELECT '(fake)' AS val) INSERT INTO t SELECT * FROM cte", DML},
+		{"WITH cte AS (SELECT /* ) */ 1 AS val) INSERT INTO t SELECT * FROM cte", DML},
+		{"WITH cte AS (SELECT \"col(name)\" AS val) DELETE FROM t WHERE val = 1", DML},
 	}
 
 	for _, v := range testCases {

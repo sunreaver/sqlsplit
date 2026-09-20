@@ -186,10 +186,14 @@ func checkCTEVerb(word string) (SQLTYPE, bool) {
 // 也可以是数据写入（WITH cte AS (...) INSERT INTO ... SELECT ... -> DML）。
 // 本方法通过追踪括号匹配深度，跳过 CTE 视图定义区，寻找括号外层的主操作动词。
 func determineCTEType(raw string) SQLTYPE {
-	upper := strings.ToUpper(raw)
 	depth := 0
-	for i := 0; i < len(upper); i++ {
-		ch := upper[i]
+	for i := 0; i < len(raw); i++ {
+		ch := raw[i]
+		// 跳过引号字符串和注释，避免其中的括号干扰深度计数
+		if nextPos, skipped := skipQuoteOrComment(raw, i); skipped {
+			i = nextPos - 1
+			continue
+		}
 		// 重要判断：进入 CTE 括号定义，增加深度
 		if ch == '(' {
 			depth++
@@ -204,7 +208,7 @@ func determineCTEType(raw string) SQLTYPE {
 		}
 		// 重要判断：在深度为 0 的外层找到首个标识符动词，即为主语句动词
 		if depth == 0 && isWordChar(ch) {
-			w := getLeadingWord(upper[i:])
+			w := getLeadingWord(raw[i:])
 			if tp, ok := checkCTEVerb(w); ok {
 				return tp
 			}
@@ -212,6 +216,43 @@ func determineCTEType(raw string) SQLTYPE {
 	}
 	// 默认兜底为 DQL
 	return DQL
+}
+
+// skipQuoteOrComment 检查指定位置是否处于引号字符串或注释的起始位置，若是则跳过并返回结束位置
+func skipQuoteOrComment(raw string, pos int) (int, bool) {
+	if pos >= len(raw) {
+		return pos, false
+	}
+	// 尝试跳过引号字面量
+	if nextPos, ok := skipQuoteAt(raw, pos); ok {
+		return nextPos, true
+	}
+	// 尝试跳过注释
+	return skipCommentAt(raw, pos)
+}
+
+// skipQuoteAt 检查并跳过单引号或双引号字面量
+func skipQuoteAt(raw string, pos int) (int, bool) {
+	ch := raw[pos]
+	if ch == '\'' {
+		return scanSingleQuote(raw, pos), true
+	}
+	if ch == '"' {
+		return scanDoubleQuote(raw, pos), true
+	}
+	return pos, false
+}
+
+// skipCommentAt 检查并跳过块注释（/* */）或单行注释（-- 和 #）
+func skipCommentAt(raw string, pos int) (int, bool) {
+	ch := raw[pos]
+	if ch == '/' && pos+1 < len(raw) && raw[pos+1] == '*' {
+		return skipBlockComment(raw, pos), true
+	}
+	if (ch == '-' && pos+1 < len(raw) && raw[pos+1] == '-') || ch == '#' {
+		return findEndOfLine(raw, pos), true
+	}
+	return pos, false
 }
 
 // SQLType 根据输入的原始 SQL 字符串，准确分析并推导出对应的 SQL 分类类型（DDL、DML、DQL、TTL、DCL）。

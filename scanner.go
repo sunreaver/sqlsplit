@@ -385,7 +385,7 @@ func (s *sqlScanner) isAtDelimiter() bool {
 	if len(s.delim) == 0 || s.pos+len(s.delim) > len(s.input) {
 		return false
 	}
-	return s.input[s.pos:s.pos+len(s.delim)] == s.delim
+	return strings.EqualFold(s.input[s.pos:s.pos+len(s.delim)], s.delim)
 }
 
 // canTerminateBlock 判定当前复合代码块（存储过程/函数）是否具备闭合条件。

@@ -158,6 +158,53 @@ func TestSplitGranular(t *testing.T) {
 			wantLen: 2,
 			wantType: []SQLTYPE{DML, DQL},
 		},
+		{
+			name:    "空输入",
+			input:   "",
+			wantLen: 0,
+		},
+		{
+			name:    "纯空白输入",
+			input:   "   \n\t  ",
+			wantLen: 0,
+		},
+		{
+			name:     "CREATE TRIGGER 复合块",
+			input:    "CREATE TRIGGER trg_audit AFTER INSERT ON orders FOR EACH ROW BEGIN INSERT INTO audit_log(action) VALUES('insert'); END;",
+			wantLen:  1,
+			wantType: []SQLTYPE{DDL},
+		},
+		{
+			name:    "嵌套 IF/LOOP 结构",
+			input:   "CREATE PROCEDURE sp_nested() BEGIN IF 1=1 THEN LOOP SELECT 1; END LOOP; END IF; END;",
+			wantLen: 1,
+			wantSQL: []string{"CREATE PROCEDURE sp_nested() BEGIN IF 1=1 THEN LOOP SELECT 1; END LOOP; END IF; END;"},
+		},
+		{
+			name:     "转义单引号（反斜杠与双单引号）",
+			input:    "SELECT 'it\\'s' AS a; SELECT 'it''s' AS b;",
+			wantLen:  2,
+			wantSQL:  []string{"SELECT 'it\\'s' AS a", "SELECT 'it''s' AS b"},
+			wantType: []SQLTYPE{DQL, DQL},
+		},
+		{
+			name:     "转义双引号",
+			input:    "SELECT \"col\\\"name\" FROM t; SELECT \"col\"\"name\" FROM t;",
+			wantLen:  2,
+			wantType: []SQLTYPE{DQL, DQL},
+		},
+		{
+			name:     "CTE 含括号字符串不干扰类型判断",
+			input:    "WITH cte AS (SELECT '(fake)' AS val) INSERT INTO t SELECT * FROM cte;",
+			wantLen:  1,
+			wantType: []SQLTYPE{DML},
+		},
+		{
+			name:     "CTE 含块注释中的括号不干扰类型判断",
+			input:    "WITH cte AS (SELECT /* ) */ 1 AS val) INSERT INTO t SELECT * FROM cte;",
+			wantLen:  1,
+			wantType: []SQLTYPE{DML},
+		},
 	}
 
 	for _, tc := range testCases {
