@@ -1,8 +1,8 @@
 package sqlsplit
 
 import (
+	"fmt"
 	"os"
-	"strings"
 	"testing"
 )
 
@@ -19,62 +19,21 @@ func TestMain(m *testing.M) {
 
 func TestSplitExample(t *testing.T) {
 	ps := Split(string(insqls))
-	if len(ps) != 44 {
-		t.Fatalf("split error, expect 44, got %d", len(ps))
+	if len(ps) != len(expectedExampleCases) {
+		t.Fatalf("split error, expect %d, got %d", len(expectedExampleCases), len(ps))
 	}
 
-	// 1. 验证常规查询
-	if ps[0].Type != DQL || !strings.Contains(ps[0].SQL, "SELECT id, username, email, status") {
-		t.Errorf("ps[0] unexpected: %s, %s", ps[0].Type, ps[0].SQL)
-	}
-
-	// 2. 验证复核 SQL (SELECT FOR UPDATE) 为 DQL
-	if ps[4].Type != DQL || !strings.Contains(ps[4].SQL, "FOR UPDATE") {
-		t.Errorf("ps[4] unexpected: %s, %s", ps[4].Type, ps[4].SQL)
-	}
-
-	// 3. 验证复核 SQL (INSERT SELECT) 为 DML
-	if ps[7].Type != DML || !strings.Contains(ps[7].SQL, "INSERT INTO vip_customer_archive") {
-		t.Errorf("ps[7] unexpected: %s, %s", ps[7].Type, ps[7].SQL)
-	}
-
-	// 4. 验证视图创建为 DDL
-	if ps[8].Type != DDL || !strings.Contains(ps[8].SQL, "CREATE VIEW v_active_customer_overview") {
-		t.Errorf("ps[8] unexpected: %s, %s", ps[8].Type, ps[8].SQL)
-	}
-
-	// 5. 验证 CTE 查询与 CTE 插入
-	if ps[11].Type != DQL || !strings.Contains(ps[11].SQL, "WITH RECURSIVE dept_tree") {
-		t.Errorf("ps[11] unexpected: %s, %s", ps[11].Type, ps[11].SQL)
-	}
-	if ps[12].Type != DML || !strings.Contains(ps[12].SQL, "INSERT INTO user_rank_snapshot") {
-		t.Errorf("ps[12] unexpected: %s, %s", ps[12].Type, ps[12].SQL)
-	}
-
-	// 6. 验证复杂 Oracle 存储过程完整性（包含内部所有循环、分支、异常）
-	if ps[14].Type != DDL || !strings.Contains(ps[14].SQL, "SP_FTP_ACCT_DATA") || !strings.Contains(ps[14].SQL, "end loop;") {
-		t.Errorf("ps[14] unexpected Oracle procedure: %s", ps[14].SQL)
-	}
-	if ps[15].Type != DDL || !strings.Contains(ps[15].SQL, "SP_FTP_DEL_DATA") || !strings.Contains(ps[15].SQL, "SQLERRM") {
-		t.Errorf("ps[15] unexpected Oracle procedure SP_FTP_DEL_DATA")
-	}
-
-	// 7. 验证 MySQL DELIMITER 存储过程（已消费 DELIMITER 指令，无多余 //）
-	if ps[19].Type != DDL || !strings.Contains(ps[19].SQL, "sp_mysql_calc_salary") || strings.HasSuffix(ps[19].SQL, "//") {
-		t.Errorf("ps[19] unexpected MySQL procedure: %s", ps[19].SQL)
-	}
-
-	// 8. 验证 PostgreSQL $$ 块函数为 DDL
-	if ps[23].Type != DDL || !strings.Contains(ps[23].SQL, "get_user_full_name") {
-		t.Errorf("ps[23] unexpected PG function: %s", ps[23].SQL)
-	}
-
-	// 9. 验证事务控制与权限控制
-	if ps[25].Type != TTL || !strings.HasSuffix(ps[25].SQL, "COMMIT") {
-		t.Errorf("ps[25] unexpected: %s, %s", ps[25].Type, ps[25].SQL)
-	}
-	if ps[28].Type != DCL || !strings.HasPrefix(ps[28].SQL, "GRANT") {
-		t.Errorf("ps[28] unexpected: %s, %s", ps[28].Type, ps[28].SQL)
+	for i, tc := range expectedExampleCases {
+		caseName := fmt.Sprintf("Case_%02d", i+1)
+		t.Run(caseName, func(t *testing.T) {
+			got := ps[i]
+			if got.Type != tc.WantType {
+				t.Errorf("[%s] Type mismatch: got %v, want %v", caseName, got.Type, tc.WantType)
+			}
+			if got.SQL != tc.WantSQL {
+				t.Errorf("[%s] SQL mismatch:\ngot:\n%s\nwant:\n%s", caseName, got.SQL, tc.WantSQL)
+			}
+		})
 	}
 }
 
@@ -143,8 +102,8 @@ func TestSplitGranular(t *testing.T) {
 			wantType: []SQLTYPE{DDL},
 		},
 		{
-			name: "MySQL DELIMITER 切换切分",
-			input: "DELIMITER //\nCREATE PROCEDURE p() BEGIN SELECT 1; END //\nDELIMITER ;\nSELECT 2;",
+			name:    "MySQL DELIMITER 切换切分",
+			input:   "DELIMITER //\nCREATE PROCEDURE p() BEGIN SELECT 1; END //\nDELIMITER ;\nSELECT 2;",
 			wantLen: 2,
 			wantSQL: []string{
 				"CREATE PROCEDURE p() BEGIN SELECT 1; END",
@@ -153,9 +112,9 @@ func TestSplitGranular(t *testing.T) {
 			wantType: []SQLTYPE{DDL, DQL},
 		},
 		{
-			name: "Oracle 独立行斜杠结束符",
-			input: "DECLARE\n  x INT;\nBEGIN\n  NULL;\nEND;\n/\nSELECT 100;",
-			wantLen: 2,
+			name:     "Oracle 独立行斜杠结束符",
+			input:    "DECLARE\n  x INT;\nBEGIN\n  NULL;\nEND;\n/\nSELECT 100;",
+			wantLen:  2,
 			wantType: []SQLTYPE{DML, DQL},
 		},
 		{

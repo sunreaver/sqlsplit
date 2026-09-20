@@ -26,6 +26,10 @@ type sqlScanner struct {
 	blockDepth int
 	// justSawEnd 标记上一个非空白词是否为 END，用于防止紧跟其后的 IF/LOOP/CASE/REPEAT（如 END IF、END LOOP）被误识别为开启新块
 	justSawEnd bool
+	// lastWord 记录最近读取的一个大写关键字
+	lastWord string
+	// isPkgBody 标记当前复合块是否为 Oracle PACKAGE BODY
+	isPkgBody bool
 	// leadingTokens 收集当前语句开头的若干个关键字（最多8个），用于判断该语句是否属于存储过程/触发器/函数等复合块
 	leadingTokens []string
 	// results 存储切分产出的有效完整 SQL 语句列表
@@ -178,6 +182,18 @@ func isStandaloneSlash(input string, pos int) (int, bool) {
 	return pos, false
 }
 
+// tryHandleSlash 在合适时机触发独立行斜杠切分（非过程块且已有累积语句时不切分，避免误伤除号）
+func (s *sqlScanner) tryHandleSlash() bool {
+	if !s.isBlock && strings.TrimSpace(s.currSQL.String()) != "" {
+		return false
+	}
+	if nextPos, ok := isStandaloneSlash(s.input, s.pos); ok {
+		s.handleSlash(nextPos)
+		return true
+	}
+	return false
+}
+
 // handleSlash 处理独立行斜杠 / 结束标记，若当前有累积的未结束语句，则触发其闭合并输出
 func (s *sqlScanner) handleSlash(nextPos int) {
 	s.pos = nextPos
@@ -268,13 +284,30 @@ func scanDollarQuoteAt(input string, pos int) (int, bool) {
 	return pos + len(tag) + closeIdx + len(tag), true
 }
 
+// isQuoteEndContext 判定字符是否处于闭合单引号的合法外部上下文
+func isQuoteEndContext(b byte) bool {
+	return b <= ' ' || b == ';' || b == ',' || b == ')'
+}
+
+// checkEscapedQuote 检查反斜杠后紧随的单引号是否为路径末尾的闭合引号
+func checkEscapedQuote(input string, i int) (int, bool) {
+	if input[i+1] == '\'' && (i+2 >= len(input) || isQuoteEndContext(input[i+2])) {
+		return i + 2, true
+	}
+	return i + 2, false
+}
+
 // scanSingleQuote 扫描单引号字符串字面量（'...'），妥善处理转义单引号（\' 与 ''），防止将字符串内部的分号当成切分符
 func scanSingleQuote(input string, pos int) int {
 	i := pos + 1
 	for i < len(input) {
 		// 重要判断：跳过反斜杠转义字符 \'
 		if input[i] == '\\' && i+1 < len(input) {
-			i += 2
+			nextI, isEnd := checkEscapedQuote(input, i)
+			if isEnd {
+				return nextI
+			}
+			i = nextI
 			continue
 		}
 		if input[i] == '\'' {
@@ -375,6 +408,10 @@ func (s *sqlScanner) handleLiteralAt() bool {
 		s.ensureStatementPrefix()
 		s.currSQL.WriteString(s.input[s.pos:nextPos])
 		s.pos = nextPos
+		// 若处于存储过程且单引号紧跟 AS（如 PG 函数体 AS 'SELECT ...'），清除声明区状态
+		if s.isBlock && s.lastWord == "AS" {
+			s.inDecl = false
+		}
 		return true
 	}
 	return false
@@ -395,6 +432,10 @@ func (s *sqlScanner) isAtDelimiter() bool {
 // 2. 若嵌套深度 blockDepth > 0（内部尚未完全配对 END），也不能结束过程。
 // 仅当深度归零且不在声明区时，分号才标志整个存储过程的结束。
 func (s *sqlScanner) canTerminateBlock() bool {
+	// Oracle PACKAGE BODY 仅在独立行斜杠或文件结束时闭合
+	if s.isPkgBody {
+		return false
+	}
 	// 重要判断：处于 Oracle 变量声明区时，分号为变量声明语句分隔符，不能终止过程
 	if !s.hasBegun && s.inDecl {
 		return false
@@ -452,7 +493,7 @@ var blockKeywords = map[string]bool{
 	"TRIGGER":   true,
 	"PACKAGE":   true,
 	"EVENT":     true,
-	"TYPE":      true,
+	"BODY":      true,
 }
 
 // nonBlockKeywords 维护虽然以 CREATE 开头但属于普通单分号 DDL 的对象关键字集合（如视图、表、索引）
@@ -548,6 +589,19 @@ func (s *sqlScanner) ensureStatementPrefix() {
 	}
 }
 
+// hasPkgBody 检查前导关键字中是否同时包含 PACKAGE 和 BODY
+func hasPkgBody(tokens []string) bool {
+	hasPkg, hasBody := false, false
+	for _, t := range tokens {
+		if t == "PACKAGE" {
+			hasPkg = true
+		} else if t == "BODY" {
+			hasBody = true
+		}
+	}
+	return hasPkg && hasBody
+}
+
 // onWordRead 在扫描到一个常规单词时触发状态流转：
 // 1. 将前置注释附着并累积当前单词。
 // 2. 收集语句前缀 Token 并触发是否为过程块（checkBlockStart）判定。
@@ -555,10 +609,12 @@ func (s *sqlScanner) ensureStatementPrefix() {
 func (s *sqlScanner) onWordRead(word string) {
 	s.ensureStatementPrefix()
 	s.currSQL.WriteString(word)
+	upper := strings.ToUpper(word)
+	s.lastWord = upper
 
 	// 收集前导关键字用于复合块首部判定
 	if len(s.leadingTokens) < 8 {
-		s.leadingTokens = append(s.leadingTokens, strings.ToUpper(word))
+		s.leadingTokens = append(s.leadingTokens, upper)
 		if !s.isBlock && checkBlockStart(s.leadingTokens) {
 			s.isBlock = true
 			if s.leadingTokens[0] == "BEGIN" {
@@ -567,6 +623,9 @@ func (s *sqlScanner) onWordRead(word string) {
 			} else if s.leadingTokens[0] == "DECLARE" {
 				s.inDecl = true
 			}
+		}
+		if s.isBlock && !s.isPkgBody && upper == "BODY" {
+			s.isPkgBody = hasPkgBody(s.leadingTokens)
 		}
 	}
 
@@ -635,6 +694,8 @@ func (s *sqlScanner) emitStatement() {
 
 	// 重置过程块状态
 	s.isBlock = false
+	s.isPkgBody = false
+	s.lastWord = ""
 	s.inDecl = false
 	s.hasBegun = false
 	s.blockDepth = 0
@@ -660,8 +721,7 @@ func (s *sqlScanner) step() bool {
 		return true
 	}
 	// 2. 探测独立行斜杠
-	if nextPos, ok := isStandaloneSlash(s.input, s.pos); ok {
-		s.handleSlash(nextPos)
+	if s.tryHandleSlash() {
 		return true
 	}
 	// 3. 探测单行与块注释
