@@ -19,9 +19,9 @@ func TestSQLType(t *testing.T) {
 		{"INSERT INTO", DML},
 		{"UPDATE TABLE", DML},
 		{"DELETE FROM", DML},
-		{"COMMIT", TTL},
-		{"ROLLBACK", TTL},
-		{"SAVEPOINT", TTL},
+		{"COMMIT", TCL},
+		{"ROLLBACK", TCL},
+		{"SAVEPOINT", TCL},
 		{"SELECT * FROM", DQL},
 		{"SET FOREIGN_KEY_CHECKS=0", DCL},
 		{"RENAME TABLE", DDL},
@@ -38,7 +38,7 @@ func TestSQLType(t *testing.T) {
 		{"CREATE EXTENSION", DDL},
 		{"DROP EXTENSION", DDL},
 		{"ALTER EXTENSION", DDL},
-		{"savepoint abc", TTL},
+		{"savepoint abc", TCL},
 		{"reindex abc", DDL},
 		{"close   abc", DCL},
 		{"open    abc", DCL},
@@ -63,9 +63,9 @@ func TestSQLType(t *testing.T) {
 		{"INSERT INTO vip_users SELECT * FROM users WHERE score > 90", DML},
 		{"REPLACE INTO vip_users (id, score) VALUES (1, 100)", DML},
 		// 事务开启
-		{"START TRANSACTION", TTL},
-		{"BEGIN TRANSACTION", TTL},
-		{"BEGIN WORK", TTL},
+		{"START TRANSACTION", TCL},
+		{"BEGIN TRANSACTION", TCL},
+		{"BEGIN WORK", TCL},
 		// 视图与存储过程
 		{"CREATE VIEW v_users AS SELECT * FROM users", DDL},
 		{"CREATE OR REPLACE FORCE VIEW v_f AS SELECT 1 FROM dual", DDL},
@@ -82,7 +82,7 @@ func TestSQLType(t *testing.T) {
 		{"WITH cte AS (SELECT /* ) */ 1 AS val) INSERT INTO t SELECT * FROM cte", DML},
 		{"WITH cte AS (SELECT \"col(name)\" AS val) DELETE FROM t WHERE val = 1", DML},
 		// 匿名块/事务
-		{"BEGIN NULL; END;", TTL},
+		{"BEGIN NULL; END;", TCL},
 		{"DECLARE x INT; BEGIN NULL; END;", DML},
 	}
 

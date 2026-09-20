@@ -57,7 +57,7 @@ func (m Mode) String() string {
 type SqlParse struct {
 	// SQL 为提取出的完整单条 SQL 文本（已附加前置注释，普通语句去除了尾部分号）
 	SQL string `json:"sql"`
-	// Type 为自动推导出的 SQL 语句类别（DDL、DML、DQL、TTL、DCL）
+	// Type 为自动推导出的 SQL 语句类别（DDL、DML、DQL、TCL、DCL）
 	Type SQLTYPE `json:"type"`
 }
 

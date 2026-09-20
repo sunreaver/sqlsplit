@@ -516,20 +516,20 @@ $tax_calc$ LANGUAGE plpgsql;`,
 	},
 	// Case 26
 	{
-		WantType: TTL,
+		WantType: TCL,
 		WantSQL: `-- ----------------------------------------------------------------------------
--- 8. 事务控制（TTL）与权限管理（DCL）
+-- 8. 事务控制（TCL）与权限管理（DCL）
 -- ----------------------------------------------------------------------------
 COMMIT`,
 	},
 	// Case 27
 	{
-		WantType: TTL,
+		WantType: TCL,
 		WantSQL:  `ROLLBACK`,
 	},
 	// Case 28
 	{
-		WantType: TTL,
+		WantType: TCL,
 		WantSQL:  `SAVEPOINT point_insert_ok`,
 	},
 	// Case 29
@@ -618,7 +618,7 @@ SELECT * from users where a = ';;'`,
 	},
 	// Case 45
 	{
-		WantType: TTL,
+		WantType: TCL,
 		WantSQL: `-- ----------------------------------------------------------------------------
 -- 10. 高级边界与高危语法场景（P0/P1 测试用例及业务复杂 PL/SQL 块）
 -- ----------------------------------------------------------------------------

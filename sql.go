@@ -17,8 +17,8 @@ const (
 	DML SQLTYPE = "DML"
 	// DQL 数据查询语言（Data Query Language）：负责数据检索与只读查询（如 SELECT、SHOW、DESCRIBE、EXPLAIN 等）
 	DQL SQLTYPE = "DQL"
-	// TTL 事务处理语言（Transaction Control Language / TCL）：负责事务的提交、回滚与保存点标记（如 COMMIT、ROLLBACK、SAVEPOINT 等）
-	TTL SQLTYPE = "TTL"
+	// TCL 事务处理语言（Transaction Control Language / TCL）：负责事务的提交、回滚与保存点标记（如 COMMIT、ROLLBACK、SAVEPOINT 等）
+	TCL SQLTYPE = "TCL"
 )
 
 // dclExactVerbs 包含直接通过首动词即可无条件判定为 DCL 类别的关键字集合。
@@ -66,8 +66,8 @@ var dmlVerbs = map[string]bool{
 	"MERGE":   true, // 合并写入操作（UPSERT 语义，如 Oracle/PostgreSQL MERGE INTO）
 }
 
-// ttlVerbs 包含直接代表事务处理语言（TTL/TCL）的关键字集合。
-var ttlVerbs = map[string]bool{
+// TCLVerbs 包含直接代表事务处理语言（TCL/TCL）的关键字集合。
+var TCLVerbs = map[string]bool{
 	"COMMIT":    true, // 提交当前活动事务
 	"ROLLBACK":  true, // 回滚当前活动事务
 	"SAVEPOINT": true, // 设定事务保存点
@@ -260,14 +260,14 @@ func skipCommentAt(raw string, pos int) (int, bool) {
 	return pos, false
 }
 
-// SQLType 根据输入的原始 SQL 字符串，准确分析并推导出对应的 SQL 分类类型（DDL、DML、DQL、TTL、DCL）。
+// SQLType 根据输入的原始 SQL 字符串，准确分析并推导出对应的 SQL 分类类型（DDL、DML、DQL、TCL、DCL）。
 //
 // 处理流程：
 // 1. 自动剥离前导多行/单行注释及空白字符，提取出首个有效关键字。
 // 2. 优先匹配 DCL 专属关键字（GRANT、REVOKE、SET 等）。
 // 3. 匹配 DDL 关键字（DROP、ALTER、CREATE 等），并进一步通过正则甄别 CREATE USER/ROLE 等特殊 DCL。
 // 4. 匹配 DML 关键字（INSERT、UPDATE、DELETE、CALL、MERGE 等）。
-// 5. 匹配 TTL 事务控制关键字（COMMIT、ROLLBACK 等）。
+// 5. 匹配 TCL 事务控制关键字（COMMIT、ROLLBACK 等）。
 // 6. 对 WITH 子句深入解析主操作动词；默认兜底返回 DQL（覆盖 SELECT、SHOW、EXPLAIN 等）。
 func SQLType(raw string) SQLTYPE {
 	// 步骤 1：剥离前导注释与空白，获得纯净的起始代码
@@ -298,9 +298,9 @@ func SQLType(raw string) SQLTYPE {
 		return DML
 	}
 
-	// 步骤 6：匹配 TTL（事务控制）
-	if ttlVerbs[verb] {
-		return TTL
+	// 步骤 6：匹配 TCL（事务控制）
+	if TCLVerbs[verb] {
+		return TCL
 	}
 
 	// 步骤 7：特殊处理 WITH 通用表表达式
